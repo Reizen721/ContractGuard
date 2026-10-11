@@ -56,6 +56,6 @@ All notable changes to ContractGuard are recorded here. The project follows sema
 
 - Initial public release with a deterministic OpenAPI 3.0/3.1 compatibility engine, Web workspace, REST API, CLI/CI gate, local report history, exports, Docker support, and an optional DeepSeek explanation layer.
 
-[1.0.1]: https://github.com/mingxian233/ContractGuard/compare/24466123b5dee1178e8dc3df26665a807027a16a...v1.0.1
-[1.0.0]: https://github.com/mingxian233/ContractGuard/commit/24466123b5dee1178e8dc3df26665a807027a16a
-[1.1.0]: https://github.com/mingxian233/ContractGuard/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/Reizen721/ContractGuard/compare/24466123b5dee1178e8dc3df26665a807027a16a...v1.0.1
+[1.0.0]: https://github.com/Reizen721/ContractGuard/commit/24466123b5dee1178e8dc3df26665a807027a16a
+[1.1.0]: https://github.com/Reizen721/ContractGuard/compare/v1.0.1...v1.1.0

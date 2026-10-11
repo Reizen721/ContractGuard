@@ -2,8 +2,8 @@
 
 [简体中文](README.zh-CN.md) · English
 
-[![CI](https://github.com/mingxian233/ContractGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/mingxian233/ContractGuard/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/mingxian233/ContractGuard?display_name=tag)](https://github.com/mingxian233/ContractGuard/releases)
+[![CI](https://github.com/Reizen721/ContractGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/Reizen721/ContractGuard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Reizen721/ContractGuard?display_name=tag)](https://github.com/Reizen721/ContractGuard/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2f6f61.svg)](LICENSE)
 [![Node.js >= 22.13](https://img.shields.io/badge/Node.js-%3E%3D22.13-3c873a.svg)](package.json)
 
@@ -97,7 +97,7 @@ npm install --global pnpm@11.19.0
 ### 2. Install, build, and start
 
 ```bash
-git clone https://github.com/mingxian233/ContractGuard.git
+git clone https://github.com/Reizen721/ContractGuard.git
 cd ContractGuard
 pnpm install --frozen-lockfile
 pnpm build

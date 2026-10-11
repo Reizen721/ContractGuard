@@ -1,8 +1,8 @@
 # ContractGuard 交付与发布检查 / Delivery Checklist
 
-更新日期：2026-09-23
+更新日期：2026-10-11
 
-公开仓库：[mingxian233/ContractGuard](https://github.com/mingxian233/ContractGuard)
+公开仓库：[Reizen721/ContractGuard](https://github.com/Reizen721/ContractGuard)
 
 本清单说明公开仓库已经交付的内容、可复现的验收方式、明确排除的本机数据，以及后续每次发布仍需由维护者确认的事项。它不以勾选项替代 GitHub Actions 或实际运行结果。
 

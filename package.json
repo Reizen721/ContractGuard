@@ -13,12 +13,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mingxian233/ContractGuard.git"
+    "url": "git+https://github.com/Reizen721/ContractGuard.git"
   },
   "bugs": {
-    "url": "https://github.com/mingxian233/ContractGuard/issues"
+    "url": "https://github.com/Reizen721/ContractGuard/issues"
   },
-  "homepage": "https://github.com/mingxian233/ContractGuard#readme",
+  "homepage": "https://github.com/Reizen721/ContractGuard#readme",
   "license": "MIT",
   "packageManager": "pnpm@11.19.0",
   "scripts": {

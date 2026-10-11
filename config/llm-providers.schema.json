@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/mingxian233/ContractGuard/raw/main/config/llm-providers.schema.json",
+  "$id": "https://github.com/Reizen721/ContractGuard/raw/main/config/llm-providers.schema.json",
   "title": "ContractGuard LLM provider configuration",
   "description": "Server-owned provider profiles. API secrets are referenced by environment-variable name and must never be stored in this document.",
   "type": "object",

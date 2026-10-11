@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/mingxian233/ContractGuard/raw/main/config/rule-policy.schema.json",
+  "$id": "https://github.com/Reizen721/ContractGuard/raw/main/config/rule-policy.schema.json",
   "title": "ContractGuard rule policy",
   "description": "Optional rule enablement, severity overrides, and scoring weights for ContractGuard 1.1.0.",
   "type": "object",
