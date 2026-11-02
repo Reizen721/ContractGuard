@@ -59,7 +59,7 @@ In the Agent workspace, select **订单字段迁移与已有测试** (`orders-mi
 On macOS/Linux, start the same demo with:
 
 ```bash
-CONTRACTGUARD_PROJECT_CONFIG=./fixtures/project-tests/demo-registry.json pnpm start
+CONTRACTGUARD_PROJECT_CONFIG="$PWD/fixtures/project-tests/demo-registry.json" pnpm start
 ```
 
 ## Use it in an agent

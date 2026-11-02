@@ -59,7 +59,7 @@ Windows 也可以用启动器完成安装与启动：
 macOS/Linux 使用同一注册表：
 
 ```bash
-CONTRACTGUARD_PROJECT_CONFIG=./fixtures/project-tests/demo-registry.json pnpm start
+CONTRACTGUARD_PROJECT_CONFIG="$PWD/fixtures/project-tests/demo-registry.json" pnpm start
 ```
 
 ## 接入 Agent
