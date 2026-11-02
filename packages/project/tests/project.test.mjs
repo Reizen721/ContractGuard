@@ -79,6 +79,10 @@ test('empty and entirely skipped Node test selections are inconclusive', async (
     assert.equal((await runProjectTests(await registry.prepare('orders-migration'))).status, 'inconclusive');
     await writeFile(file, 'import {test} from "node:test"; test.skip("not executed", () => {});\n');
     assert.equal((await runProjectTests(await registry.prepare('orders-migration'))).status, 'inconclusive');
+    await writeFile(file, 'import {test} from "node:test"; test("skip empty reason", t => t.skip("")); test("todo empty reason", t => t.todo(""));\n');
+    const emptyReasons = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(emptyReasons.status, 'inconclusive');
+    assert.deepEqual(emptyReasons.baseline.tests, { total: 2, passed: 0, failed: 0, skipped: 2 });
   });
 });
 
@@ -96,6 +100,55 @@ test('invalid baseline is kept distinct from a candidate regression', async () =
     await writeFile(join(source, 'test/orders.test.mjs'), 'import{test}from"node:test";import assert from"node:assert/strict";test("already broken",()=>assert.fail("baseline fails"));\n');
     const result = await runProjectTests(await registry.prepare('orders-migration'));
     assert.equal(result.status, 'invalid-baseline'); assert.equal(result.patchStatus, 'not-proposed');
+  });
+});
+
+test('real Node nested suites and parent subtests retain counts and full identity', async () => {
+  await project(async ({ registry, source }) => {
+    await writeFile(join(source, 'test/orders.test.mjs'), 'import{describe,it,test}from"node:test";describe("suite",()=>{it("leaf",()=>{});it.skip("skip",()=>{});});test("parent",async t=>{await t.test("child",()=>{});});\n');
+    const result = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(result.status, 'pass');
+    assert.deepEqual(result.baseline.tests, { total: 4, passed: 3, failed: 0, skipped: 1 });
+    assert.equal(result.baseline.testIdentityHash, result.candidate.testIdentityHash);
+  });
+});
+
+test('same-named tests in separately configured files retain actual file evidence', async () => {
+  await project(async ({ registry, source, config, save }) => {
+    const testSource = 'import{test}from"node:test";test("same name",()=>{});\n';
+    await writeFile(join(source, 'test/orders.test.mjs'), testSource);
+    await writeFile(join(source, 'test/second.test.mjs'), testSource);
+    config.projects[0].tests.files.push('test/second.test.mjs'); await save();
+    const result = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(result.status, 'pass'); assert.equal(result.baseline.tests.passed, 2);
+    assert.equal(result.baseline.testIdentityHash, result.candidate.testIdentityHash);
+  });
+});
+
+test('Node tests imported from an unselected file cannot masquerade as selected-file evidence', async () => {
+  await project(async ({ registry, source }) => {
+    await writeFile(join(source, 'test/orders.test.mjs'), 'import"./unselected.mjs";import{test}from"node:test";test("selected",()=>{});\n');
+    await writeFile(join(source, 'test/unselected.mjs'), 'import{test}from"node:test";test("test/orders.test.mjs",()=>{});\n');
+    const result = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(result.status, 'inconclusive'); assert.equal(result.baseline.status, 'inconclusive');
+  });
+});
+
+test('changing a suite name with the same passing leaf count invalidates identity comparison', async () => {
+  await project(async ({ registry, source }) => {
+    await writeFile(join(source, 'test/orders.test.mjs'), 'import{describe,it}from"node:test";import{readFileSync}from"node:fs";const response=JSON.parse(readFileSync(new URL("./response.json",import.meta.url)));describe(response.customerName?"original suite":"replacement suite",()=>{it("same leaf",()=>{});});\n');
+    const result = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(result.baseline.status, 'passed'); assert.equal(result.candidate.status, 'passed');
+    assert.equal(result.status, 'inconclusive'); assert.notEqual(result.baseline.testIdentityHash, result.candidate.testIdentityHash);
+  });
+});
+
+test('a cancelled Node subtest remains inconclusive without an external abort signal', async () => {
+  await project(async ({ registry, source }) => {
+    await writeFile(join(source, 'test/orders.test.mjs'), 'import{test}from"node:test";test("cancelled by test timeout",{timeout:25},async()=>{await new Promise(()=>{});});\n');
+    const result = await runProjectTests(await registry.prepare('orders-migration'));
+    assert.equal(result.status, 'inconclusive'); assert.equal(result.baseline.status, 'inconclusive');
+    assert.equal(result.patchStatus, 'not-proposed');
   });
 });
 

@@ -6,6 +6,7 @@ import { dirname, join, resolve, relative, isAbsolute, sep } from 'node:path';
 import type { CallerPatch } from '@contractguard/caller';
 import { ProjectError } from './errors.js';
 import { PROJECT_LIMITS, projectPath, sha256, snapshots } from './registry.js';
+import { parseNodeReport } from './node-reporter.js';
 import type { PreparedProject, ProjectPhase, ProjectSnapshot, ProjectTestReport } from './types.js';
 
 const require = createRequire(import.meta.url);
@@ -29,29 +30,6 @@ function reportFile(file: string, workspace: string, allowed: string[]): string 
   const path = relative(workspace, file).replaceAll('\\', '/');
   if (!allowed.includes(path)) throw new Error('Runner executed a test outside the configured test file list.');
   return path;
-}
-function xmlText(text: string): string {
-  return text.replace(/&#(\d+);/g, (_, number: string) => String.fromCodePoint(Number(number))).replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-}
-function parseNodeReport(xml: string, workspace: string, allowed: string[]): { tests: ProjectPhase['tests']; identity: string } {
-  if (!xml.includes('<testsuites') || !xml.includes('</testsuites>') || /<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('Invalid Node test reporter output.');
-  const cases = xml.match(/<testcase\b[\s\S]*?(?:<\/testcase>|\/>)/g) ?? [];
-  const failed = cases.filter((entry) => /<(?:failure|error)\b/.test(entry)).length;
-  const skipped = cases.filter((entry) => /<skipped\b/.test(entry)).length;
-  const totalComment = xml.match(/<!-- tests (\d+) -->/);
-  if (!totalComment || Number(totalComment[1]) !== cases.length || Number(xml.match(/<!-- cancelled (\d+) -->/)?.[1] ?? 0) > 0) throw new Error('Node test totals are inconsistent or include cancelled tests.');
-  const files = new Set<string>();
-  const identities = cases.map((entry) => {
-    const tag = entry.slice(0, entry.indexOf('>') + 1);
-    const name = xmlText(tag.match(/\bname="([^"]*)"/)?.[1] ?? '');
-    const location = xmlText(tag.match(/\bfile="([^"]*)"/)?.[1] ?? '');
-    const file = reportFile(location, workspace, allowed); files.add(file);
-    // Node reports an otherwise empty test file as a passing file-level test.
-    if (!name || name === location || name.replaceAll('\\', '/') === file || name === file.split('/').at(-1)) throw new Error('No explicit named test was registered.');
-    return [file, name, /<skipped\b/.test(entry) ? 'skipped' : 'executed'];
-  });
-  if (files.size !== allowed.length || allowed.some((file) => !files.has(file))) throw new Error('Not all configured test files produced results.');
-  return { tests: { total: cases.length, passed: cases.length - failed - skipped, failed, skipped }, identity: sha256(JSON.stringify(identities.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))) };
 }
 function parseVitestReport(text: string, workspace: string, allowed: string[]): { tests: ProjectPhase['tests']; identity: string } {
   const value: unknown = JSON.parse(text);
@@ -83,11 +61,11 @@ async function phaseRun(base: string, label: string, snapshot: ProjectSnapshot, 
   if (signal?.aborted) return emptyPhase('Project tests were cancelled.', true);
   const workspace = join(base, label); await mkdir(workspace);
   await writeSnapshot(workspace, snapshot, side, patches);
-  const reporter = join(base, `${label}.${snapshot.manifest.tests.runner === 'node-test' ? 'xml' : 'json'}`);
+  const reporter = join(base, `${label}.${snapshot.manifest.tests.runner === 'node-test' ? 'ndjson' : 'json'}`);
   const args: string[] = [];
   if (snapshot.dependencyDirectory) await symlink(snapshot.dependencyDirectory, join(workspace, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
   if (snapshot.manifest.tests.runner === 'node-test') {
-    args.push('--experimental-strip-types', '--test', '--test-concurrency=1', '--test-reporter=junit', `--test-reporter-destination=${reporter}`, '--test-reporter=spec', '--test-reporter-destination=stdout', ...snapshot.manifest.tests.files);
+    args.push('--experimental-strip-types', '--test', '--test-concurrency=1', `--test-reporter=${new URL('./node-reporter.js', import.meta.url).href}`, `--test-reporter-destination=${reporter}`, '--test-reporter=spec', '--test-reporter-destination=stdout', ...snapshot.manifest.tests.files);
   } else {
     const vitestEntry = require.resolve('vitest/vitest.mjs');
     if (!snapshot.dependencyDirectory) {

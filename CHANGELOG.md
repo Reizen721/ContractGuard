@@ -11,6 +11,7 @@ The consolidated release of the API change workbench and MCP plugin. Publication
 - Unified first-party package, native-engine, CLI, API and MCP/plugin version identifiers at 2.0.0; added a release-version consistency check. The integrated upstream oasdiff remains 1.35.0.
 - Kept schemaVersion 1 and existing completed history readable without rewriting its original metadata. Added an explicit 1.5.0 regression-pack compatibility allowance, preserving original package checksums and rejecting unknown versions or modified input.
 - Added nine cross-entry upgrade checks for real CLI replay, retained consumer gates, tamper/version rejection and historical HTTP list/detail/export behavior; included them in pnpm check.
+- Replaced the Node project runner's JUnit file-attribute dependency with a bounded event reporter for Node.js 22 and 24. Preserved source-file selection, test identity, completion and cancellation checks; added 13 parser and real-runner regressions and a dual-version CI matrix.
 - Reorganized the English and Chinese README around current usage, added a complete 2.0 guide and bilingual release notes, and documented portable MCP archive installation and DeepSeek input without putting credentials in plugin configuration.
 
 See the [2.0 release notes](docs/releases/v2.0.0.en.md), [user guide](docs/v2.0-user-guide.md) and [verification index](docs/verification.md). Prior live-model acceptance remains labelled with its actual V1.8 version; the 2.0 release does not claim a new cloud run.
