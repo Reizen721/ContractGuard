@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/openapi-ts/openapi-typescript",
+  "commit": "d46a319ae2efab30e135ba9b223a3cffd1a67eab",
+  "scope": "Unmodified upstream openapi-fetch runtime and five existing GET tests; only test/helpers.ts receives the disclosed local response mutation adapter.",
+  "records": [
+    {
+      "upstreamPath": "packages/openapi-fetch/src/index.js",
+      "localPath": "src/index.js",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/src/index.js",
+      "sha256": "a5e645c0ddb47baa9f2683c1ee7110210a441d17614e77dafc34d7add4a58029",
+      "bytes": 20875
+    },
+    {
+      "upstreamPath": "packages/openapi-fetch/test/helpers.ts",
+      "localPath": "test/helpers.ts",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/test/helpers.ts",
+      "sha256": "907a1c84f2eb148432bfed70110e30dcbb2e6498b8485903cd6eeb7e0fd6317e",
+      "bytes": 1713
+    },
+    {
+      "upstreamPath": "packages/openapi-fetch/test/http-methods/get.test.ts",
+      "localPath": "test/http-methods/get.test.ts",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/test/http-methods/get.test.ts",
+      "sha256": "b2bda1f57d1a40f8d490e2909e772d55e6971887977dc3eba936fecb73f17196",
+      "bytes": 2862
+    },
+    {
+      "upstreamPath": "packages/openapi-fetch/test/http-methods/schemas/get.d.ts",
+      "localPath": "test/http-methods/schemas/get.d.ts",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/test/http-methods/schemas/get.d.ts",
+      "sha256": "b15c7b7c753e9d54d9819d38aa81799326428a4ea51cf4f7bc7c93d3ea798836",
+      "bytes": 3131
+    },
+    {
+      "upstreamPath": "packages/openapi-fetch/package.json",
+      "localPath": "package.json",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/package.json",
+      "sha256": "1dd6ef49d75e7098831c12ae9fc2ab375e1f4fe063086dc8bbb5d554a6bbac7e",
+      "bytes": 2218
+    },
+    {
+      "upstreamPath": "LICENSE",
+      "localPath": "LICENSE",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/LICENSE",
+      "sha256": "ed4b2c8f3a9aad2bd9fb8088d3e2a142116a13627c7223c28315c65e3ab9bd41",
+      "bytes": 1068
+    },
+    {
+      "upstreamPath": "packages/openapi-fetch/test/http-methods/schemas/get.yaml",
+      "localPath": "upstream/get.yaml",
+      "url": "https://raw.githubusercontent.com/openapi-ts/openapi-typescript/d46a319ae2efab30e135ba9b223a3cffd1a67eab/packages/openapi-fetch/test/http-methods/schemas/get.yaml",
+      "sha256": "962f9a233443605e9bac01b9cd0e45115197cd912f943962ed62629c865f9f4f",
+      "bytes": 1362
+    }
+  ],
+  "benchmarkContracts": {
+    "author": "ContractGuard benchmark",
+    "basis": "A narrow contract profile matching runtime response assertions in the existing GET tests. It is NOT a byte-identical copy of the upstream schema or a historical provider release.",
+    "reason": "Upstream get.yaml models Post.id whereas the existing successful-response runtime test sends title/body/publish_date. The source schema is retained separately for transparency; no silent claim of fidelity is made."
+  },
+  "adaptations": [
+    {
+      "localPath": "test/helpers.ts",
+      "original": "upstream/helpers.ts",
+      "description": "Only injected fetch transport is wrapped to apply a locally declared JSON response mutation. Existing assertions and src/index.js remain unchanged."
+    },
+    {
+      "localPath": "vitest.config.mjs",
+      "description": "Local runtime-only five-test scope; upstream typecheck/build/export/e2e suites are not claimed."
+    }
+  ]
+}

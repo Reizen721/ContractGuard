@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "required": [
+    "sourceUrl"
+  ],
+  "properties": {
+    "sourceUrl": {
+      "type": "string",
+      "maxLength": 2048
+    }
+  }
+}

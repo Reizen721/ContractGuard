@@ -1,0 +1,9 @@
+{
+  "name": "assetId",
+  "in": "path",
+  "required": true,
+  "schema": {
+    "type": "string",
+    "minLength": 1
+  }
+}

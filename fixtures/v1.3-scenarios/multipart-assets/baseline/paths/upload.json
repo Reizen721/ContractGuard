@@ -1,0 +1,45 @@
+{
+  "post": {
+    "operationId": "uploadAsset",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "multipart/form-data": {
+          "schema": {
+            "$ref": "../schemas/upload-form.json"
+          },
+          "encoding": {
+            "file": {
+              "contentType": "application/octet-stream"
+            }
+          }
+        },
+        "application/octet-stream": {
+          "schema": {
+            "$ref": "../schemas/binary-file.json"
+          }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "description": "Asset created",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "assetId"
+              ],
+              "properties": {
+                "assetId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

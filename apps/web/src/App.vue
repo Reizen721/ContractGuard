@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AgentWorkspace from './components/AgentWorkspace.vue'
+import CallerWorkspace from './components/CallerWorkspace.vue'
 import AiReportInterpreter from './components/AiReportInterpreter.vue'
 import ChangeList from './components/ChangeList.vue'
 import HistoryPanel from './components/HistoryPanel.vue'
 import RuleDrawer from './components/RuleDrawer.vue'
 import SpecPanel from './components/SpecPanel.vue'
 import SummaryCards from './components/SummaryCards.vue'
+import CoveragePanel from './components/CoveragePanel.vue'
+import ConsumerEvidenceInput from './components/ConsumerEvidenceInput.vue'
+import ConsumerImpactPanel from './components/ConsumerImpactPanel.vue'
+import { parseConsumerEvidence } from './consumer-evidence'
+import { consumerExample } from './consumer-samples'
 import {
   ApiError,
   checkHealth,
@@ -16,15 +23,24 @@ import {
   listAnalyses,
   listRules,
 } from './api'
-import { sampleBaseline, sampleCandidate } from './samples'
-import type { AnalysisRecord, ExportFormat, RuleDefinition, ViewName } from './types'
+import { sampleBaseline, sampleCandidate, sampleBundles } from './samples'
+import type { AnalysisRecord, ContractBundleInput, ExportFormat, RuleDefinition, ViewName } from './types'
 import { formatDate } from './utils'
 
 const view = ref<ViewName>('analyze')
+const callerRecordId = ref<string>()
+function openCallerReview(id: string) { callerRecordId.value = id; switchView('callers') }
 const baseline = ref('')
 const candidate = ref('')
 const baselineName = ref('baseline.yaml')
 const candidateName = ref('candidate.yaml')
+const baselineBundle = ref<ContractBundleInput | null>(null)
+const candidateBundle = ref<ContractBundleInput | null>(null)
+const baselineReading = ref(false)
+const candidateReading = ref(false)
+const consumerEvidenceText = ref('')
+const consumerReading = ref(false)
+const workspaceReset = ref(0)
 const activeAnalysis = ref<AnalysisRecord | null>(null)
 const history = ref<AnalysisRecord[]>([])
 const historyError = ref('')
@@ -39,9 +55,63 @@ const toast = ref<{ type: 'success' | 'error' | 'info'; message: string } | null
 const exportOpen = ref(false)
 const exportMenu = ref<HTMLElement | null>(null)
 const exportButton = ref<HTMLButtonElement | null>(null)
+const historyReport = ref(false)
+const submittedInput = ref('')
+let analysisSequence = 0
+let analysisController: AbortController | null = null
+let historySequence = 0
 let toastTimer: number | undefined
 
-const hasSpecs = computed(() => Boolean(baseline.value.trim() && candidate.value.trim()))
+function hasContract(text: string, bundle: ContractBundleInput | null): boolean {
+  return bundle !== null ? bundle.files.length > 0 && bundle.files.some((file) => file.path === bundle.entry) : Boolean(text.trim())
+}
+const filesLoading = computed(() => baselineReading.value || candidateReading.value || consumerReading.value)
+const consumerInput = computed(() => {
+  try { return { value: parseConsumerEvidence(consumerEvidenceText.value), error: '' } }
+  catch (error) { return { value: undefined, error: error instanceof Error ? error.message : '调用方样例无法读取，请重新输入。' } }
+})
+const hasSpecs = computed(() => hasContract(baseline.value, baselineBundle.value) && hasContract(candidate.value, candidateBundle.value))
+const currentInput = computed(() => JSON.stringify([baselineBundle.value ?? baseline.value, candidateBundle.value ?? candidate.value, baselineName.value, candidateName.value, consumerEvidenceText.value]))
+const reportIsStale = computed(() => activeAnalysis.value !== null && !historyReport.value && currentInput.value !== submittedInput.value)
+const agentInput = computed(() => hasSpecs.value && !filesLoading.value && !consumerInput.value.error ? {
+  baseline: baselineBundle.value ?? baseline.value,
+  candidate: candidateBundle.value ?? candidate.value,
+  baselineName: baselineName.value,
+  candidateName: candidateName.value,
+  ...(consumerInput.value.value ? { consumerEvidence: consumerInput.value.value } : {}),
+} : null)
+const agentInputIssue = computed(() => filesLoading.value ? '请等待文件读取完成。' : consumerInput.value.error || '请先载入基线和候选规范。')
+
+function cancelAnalysis(): void {
+  analysisSequence += 1
+  analysisController?.abort()
+  analysisController = null
+  isAnalyzing.value = false
+}
+
+function resetFileReads(): void {
+  workspaceReset.value += 1
+  baselineReading.value = false
+  candidateReading.value = false
+  consumerReading.value = false
+}
+
+function onConsumerLoading(loading: boolean): void {
+  consumerReading.value = loading
+  if (loading) cancelAnalysis()
+}
+
+function onFileLoading(side: 'baseline' | 'candidate', loading: boolean): void {
+  if (side === 'baseline') baselineReading.value = loading
+  else candidateReading.value = loading
+  if (loading) cancelAnalysis()
+}
+
+// Inputs may remain editable while a request is running. Never attach its
+// response to a newer workspace, even if an upstream ignores cancellation.
+watch(currentInput, () => {
+  if (analysisController !== null) cancelAnalysis()
+}, { flush: 'sync' })
 
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
@@ -64,6 +134,12 @@ function updateServiceStatus(error: unknown): void {
 }
 
 function loadExample(): void {
+  cancelAnalysis()
+  resetFileReads()
+  consumerEvidenceText.value = ''
+  baselineBundle.value = null
+  candidateBundle.value = null
+  historyReport.value = false
   baseline.value = sampleBaseline
   candidate.value = sampleCandidate
   baselineName.value = 'campus-events-v1.4.yaml'
@@ -73,7 +149,47 @@ function loadExample(): void {
   showToast('已载入 Campus Events API 演示规范。', 'success')
 }
 
+function loadBundleExample(): void {
+  cancelAnalysis()
+  resetFileReads()
+  consumerEvidenceText.value = ''
+  const samples = sampleBundles()
+  baseline.value = ''
+  candidate.value = ''
+  baselineBundle.value = samples.baseline
+  candidateBundle.value = samples.candidate
+  baselineName.value = 'Order Service v1 / openapi.yaml'
+  candidateName.value = 'Order Service v2 / openapi.yaml'
+  historyReport.value = false
+  activeAnalysis.value = null
+  view.value = 'analyze'
+  showToast('已载入多文件示例：入口规范和 schemas/order.yaml；候选含尚未分析的 webhook，报告会单独提示覆盖范围。', 'success')
+}
+
+function loadConsumerExample(): void {
+  cancelAnalysis()
+  resetFileReads()
+  const sample = consumerExample()
+  baselineBundle.value = null
+  candidateBundle.value = null
+  baseline.value = sample.baseline
+  candidate.value = sample.candidate
+  baselineName.value = 'consumer-demo-baseline.json'
+  candidateName.value = 'consumer-demo-candidate.json'
+  consumerEvidenceText.value = sample.evidence
+  historyReport.value = false
+  activeAnalysis.value = null
+  view.value = 'analyze'
+  showToast('已载入规范和 3 个调用方的合成样例。运行分析可查看请求回归、响应约束失败和通过的对照。', 'success')
+}
+
 function clearWorkspace(): void {
+  cancelAnalysis()
+  resetFileReads()
+  consumerEvidenceText.value = ''
+  baselineBundle.value = null
+  candidateBundle.value = null
+  historyReport.value = false
   baseline.value = ''
   candidate.value = ''
   baselineName.value = 'baseline.yaml'
@@ -83,51 +199,85 @@ function clearWorkspace(): void {
 }
 
 async function runAnalysis(): Promise<void> {
-  if (!hasSpecs.value || isAnalyzing.value) return
+  if (!hasSpecs.value || isAnalyzing.value || filesLoading.value || consumerInput.value.error) return
+  cancelAnalysis()
+  const sequence = analysisSequence
+  const controller = new AbortController()
+  analysisController = controller
+  const snapshot = currentInput.value
   isAnalyzing.value = true
   try {
-    activeAnalysis.value = await createAnalysis({
-      baseline: baseline.value,
-      candidate: candidate.value,
+    const result = await createAnalysis({
+      baseline: baselineBundle.value ?? baseline.value,
+      candidate: candidateBundle.value ?? candidate.value,
       baselineName: baselineName.value,
       candidateName: candidateName.value,
-    })
+      ...(consumerInput.value.value ? { consumerEvidence: consumerInput.value.value } : {}),
+    }, controller.signal)
+    if (sequence !== analysisSequence || controller.signal.aborted || snapshot !== currentInput.value) return
+    activeAnalysis.value = result
+    submittedInput.value = snapshot
+    historyReport.value = false
     apiOnline.value = true
     showToast('分析完成，报告已保存到历史记录。', 'success')
     void refreshHistory()
     requestAnimationFrame(() => document.querySelector('#analysis-results')?.scrollIntoView({ behavior: 'smooth' }))
   } catch (error) {
+    if (sequence !== analysisSequence || controller.signal.aborted) return
     updateServiceStatus(error)
     showToast(friendlyError(error), 'error')
   } finally {
-    isAnalyzing.value = false
+    if (sequence === analysisSequence) {
+      analysisController = null
+      isAnalyzing.value = false
+    }
   }
 }
 
 async function refreshHistory(): Promise<void> {
+  const sequence = ++historySequence
   historyLoading.value = true
   historyError.value = ''
   try {
-    history.value = await listAnalyses()
+    const result = await listAnalyses()
+    if (sequence !== historySequence) return
+    history.value = result
     apiOnline.value = true
   } catch (error) {
+    if (sequence !== historySequence) return
     historyError.value = friendlyError(error)
     updateServiceStatus(error)
     if (view.value !== 'history') showToast(historyError.value, 'error')
   } finally {
-    historyLoading.value = false
+    if (sequence === historySequence) historyLoading.value = false
   }
 }
 
 async function openHistory(analysis: AnalysisRecord): Promise<void> {
+  cancelAnalysis()
+  const sequence = analysisSequence
+  const controller = new AbortController()
+  analysisController = controller
   try {
-    activeAnalysis.value = await getAnalysis(analysis.id)
+    const result = await getAnalysis(analysis.id, controller.signal)
+    if (sequence !== analysisSequence || controller.signal.aborted) return
+    activeAnalysis.value = result
+    historyReport.value = true
     apiOnline.value = true
     view.value = 'analyze'
   } catch (error) {
+    if (sequence !== analysisSequence || controller.signal.aborted) return
     updateServiceStatus(error)
     showToast(friendlyError(error), 'error')
+  } finally {
+    if (sequence === analysisSequence) analysisController = null
   }
+}
+
+function returnToWorkspace(): void {
+  cancelAnalysis()
+  historyReport.value = false
+  activeAnalysis.value = null
 }
 
 async function removeHistory(analysis: AnalysisRecord): Promise<void> {
@@ -178,6 +328,9 @@ async function exportReport(format: ExportFormat): Promise<void> {
 }
 
 function switchView(next: ViewName): void {
+  cancelAnalysis()
+  resetFileReads()
+  if (next === 'analyze' && historyReport.value) returnToWorkspace()
   view.value = next
   exportOpen.value = false
   if (next === 'history') void refreshHistory()
@@ -205,6 +358,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelAnalysis()
+  historySequence += 1
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   document.removeEventListener('keydown', onDocumentKeydown)
   if (toastTimer !== undefined) window.clearTimeout(toastTimer)
@@ -216,13 +371,15 @@ onBeforeUnmount(() => {
     <aside class="sidebar">
       <a class="brand" href="#" aria-label="ContractGuard 首页" @click.prevent="switchView('analyze')">
         <span class="brand-mark" aria-hidden="true">CG</span>
-        <span><strong>ContractGuard</strong><small>OpenAPI compatibility</small></span>
+        <span><strong>ContractGuard</strong><small>API RELEASE REVIEW</small></span>
       </a>
 
       <nav aria-label="主导航">
         <button :class="{ active: view === 'analyze' }" type="button" :aria-current="view === 'analyze' ? 'page' : undefined" @click="switchView('analyze')">
           新建分析
         </button>
+        <button :class="{ active: view === 'agent' }" type="button" :aria-current="view === 'agent' ? 'page' : undefined" @click="switchView('agent')">Agent 审查</button>
+        <button :class="{ active: view === 'callers' }" type="button" :aria-current="view === 'callers' ? 'page' : undefined" @click="switchView('callers')">调用方迁移</button>
         <button :class="{ active: view === 'history' }" type="button" :aria-current="view === 'history' ? 'page' : undefined" @click="switchView('history')">
           分析历史
           <b v-if="history.length">{{ history.length }}</b>
@@ -239,7 +396,7 @@ onBeforeUnmount(() => {
           <small>OpenAPI 3.0 / 3.1</small>
         </div>
       </div>
-      <p class="version">规则引擎 v1.1.0</p>
+      <p class="version">v2.0.0</p>
     </aside>
 
     <main>
@@ -249,6 +406,8 @@ onBeforeUnmount(() => {
         </button>
         <nav class="mobile-nav" aria-label="移动端主导航">
           <button type="button" :aria-current="view === 'analyze' ? 'page' : undefined" :class="{ active: view === 'analyze' }" @click="switchView('analyze')">分析</button>
+          <button type="button" :aria-current="view === 'agent' ? 'page' : undefined" :class="{ active: view === 'agent' }" @click="switchView('agent')">Agent</button>
+          <button type="button" :aria-current="view === 'callers' ? 'page' : undefined" :class="{ active: view === 'callers' }" @click="switchView('callers')">调用方</button>
           <button type="button" :aria-current="view === 'history' ? 'page' : undefined" :class="{ active: view === 'history' }" @click="switchView('history')">历史</button>
           <button type="button" :aria-expanded="rulesOpen" @click="openRules">规则</button>
         </nav>
@@ -259,18 +418,20 @@ onBeforeUnmount(() => {
 
       <div class="content">
         <template v-if="view === 'analyze'">
-          <section class="page-heading page-heading--hero">
+          <section class="page-heading">
             <div>
-              <h1>OpenAPI 兼容性分析</h1>
-              <p>上传当前版本和待发布版本，检查可能影响现有调用方的契约变更。</p>
+              <h1>{{ historyReport ? '历史分析报告' : 'OpenAPI 兼容性分析' }}</h1>
+              <p>{{ historyReport ? '只读查看已保存的规则结果；历史未保存原始规范，报告不会与当前编辑区混用。' : '上传当前版本和待发布版本，检查可能影响现有调用方的契约变更。' }}</p>
             </div>
             <div class="hero-actions">
-              <button class="button button--quiet" type="button" @click="loadExample">载入演示规范</button>
-              <button v-if="baseline || candidate || activeAnalysis" class="text-button danger-text" type="button" @click="clearWorkspace">清空</button>
+              <button v-if="historyReport" class="button button--quiet" type="button" @click="returnToWorkspace">返回编辑区</button>
+              <button v-else class="button button--quiet" type="button" @click="loadExample">载入演示规范</button>
+              <button v-if="!historyReport" class="button button--quiet" type="button" @click="loadBundleExample">载入多文件示例</button>
+              <button v-if="baseline || candidate || baselineBundle || candidateBundle || consumerEvidenceText || activeAnalysis || filesLoading" class="text-button danger-text" type="button" @click="clearWorkspace">清空</button>
             </div>
           </section>
 
-          <section class="workspace" aria-labelledby="workspace-title" :aria-busy="isAnalyzing">
+          <section v-if="!historyReport" class="workspace" aria-labelledby="workspace-title" :aria-busy="isAnalyzing">
             <div class="section-heading">
               <div>
                 <h2 id="workspace-title">输入规范</h2>
@@ -282,36 +443,52 @@ onBeforeUnmount(() => {
               <SpecPanel
                 v-model="baseline"
                 v-model:file-name="baselineName"
+                v-model:bundle="baselineBundle"
+                :reset-key="workspaceReset"
                 title="基线规范"
                 eyebrow="当前版本"
                 accent="baseline"
                 @error="showToast($event, 'error')"
+                @loading="onFileLoading('baseline', $event)"
               />
               <div class="compare-arrow" aria-hidden="true">→</div>
               <SpecPanel
                 v-model="candidate"
                 v-model:file-name="candidateName"
+                v-model:bundle="candidateBundle"
+                :reset-key="workspaceReset"
                 title="候选规范"
                 eyebrow="待发布版本"
                 accent="candidate"
                 @error="showToast($event, 'error')"
+                @loading="onFileLoading('candidate', $event)"
               />
             </div>
 
+            <ConsumerEvidenceInput
+              v-model="consumerEvidenceText"
+              :error="consumerInput.error"
+              :reset-key="workspaceReset"
+              @loading="onConsumerLoading"
+              @demo="loadConsumerExample"
+            />
+
             <div class="analyze-bar">
-              <p>规则分析在本机执行；只有主动生成 AI 解读时才会发送裁剪后的结果。</p>
-              <button class="button button--primary" type="button" :disabled="!hasSpecs || isAnalyzing" @click="runAnalysis">
+              <p>规则分析在本机执行。主动使用 AI 解读或 LLM 自主编排时，会向所选模型服务发送裁剪后的检查结果；LLM 模式还会发送任务目标。</p>
+              <button class="button button--quiet" type="button" :disabled="!hasSpecs || filesLoading || Boolean(consumerInput.error)" @click="switchView('agent')">交给 Agent 审查</button>
+              <button class="button button--primary" type="button" :disabled="!hasSpecs || isAnalyzing || filesLoading || Boolean(consumerInput.error)" @click="runAnalysis">
                 <span v-if="isAnalyzing" class="spinner"></span>
-                {{ isAnalyzing ? '正在分析…' : '运行兼容性分析' }}
+                {{ isAnalyzing ? '正在分析…' : filesLoading ? '正在读取文件…' : '运行兼容性分析' }}
               </button>
             </div>
           </section>
 
           <section v-if="activeAnalysis" id="analysis-results" class="results">
+            <p v-if="reportIsStale" class="report-notice" role="status">输入已变更：下方报告对应上一次提交的规范，不代表当前编辑内容。请重新运行分析。</p>
             <div class="section-heading report-heading">
               <div>
-                <p class="eyebrow">分析报告 · {{ formatDate(activeAnalysis.createdAt) }}</p>
                 <h2>{{ activeAnalysis.baselineName }} <span>→</span> {{ activeAnalysis.candidateName }}</h2>
+                <p class="report-date">分析报告 · {{ formatDate(activeAnalysis.createdAt) }}</p>
               </div>
               <div ref="exportMenu" class="export-menu">
                 <button ref="exportButton" class="button button--quiet" type="button" aria-controls="export-options" :aria-expanded="exportOpen" @click="exportOpen = !exportOpen">
@@ -324,12 +501,34 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+            <details class="report-provenance">
+              <summary>报告来源与策略</summary>
+              <dl>
+                <dt>引擎版本</dt><dd>{{ activeAnalysis.engineVersion ?? '旧版记录未保存' }}</dd>
+                <dt>规则策略</dt><dd>{{ activeAnalysis.policy?.id ?? '旧版记录未保存' }}</dd>
+                <dt>基线方言</dt><dd>{{ activeAnalysis.source?.old.dialect ?? '旧版记录未保存' }}</dd>
+                <dt>候选方言</dt><dd>{{ activeAnalysis.source?.new.dialect ?? '旧版记录未保存' }}</dd>
+                <dt>基线 SHA-256</dt><dd><code>{{ activeAnalysis.source?.old.fingerprint?.value ?? '旧版记录未保存' }}</code></dd>
+                <dt>候选 SHA-256</dt><dd><code>{{ activeAnalysis.source?.new.fingerprint?.value ?? '旧版记录未保存' }}</code></dd>
+                <dt>策略 SHA-256</dt><dd><code>{{ activeAnalysis.policy?.fingerprint?.value ?? '旧版记录未保存' }}</code></dd>
+              </dl>
+              <div v-for="side in (['old', 'new'] as const)" :key="side">
+                <template v-if="activeAnalysis.source?.[side].bundle">
+                  <p>{{ side === 'old' ? '基线' : '候选' }}契约包入口：<code>{{ activeAnalysis.source[side].bundle!.entry }}</code>；实际依赖 {{ activeAnalysis.source[side].bundle!.files.length }} 个文件</p>
+                  <ul class="bundle-audit-list"><li v-for="file in activeAnalysis.source[side].bundle!.files" :key="file.path"><code>{{ file.path }}</code><code>{{ file.fingerprint.value }}</code></li></ul>
+                </template>
+              </div>
+            </details>
+            <CoveragePanel :coverage="activeAnalysis.coverage" />
             <SummaryCards :analysis="activeAnalysis" />
+            <ConsumerImpactPanel :report="activeAnalysis.consumerImpact" :error="activeAnalysis.consumerImpactError" />
             <ChangeList :key="activeAnalysis.id" :analysis="activeAnalysis" />
             <AiReportInterpreter :key="activeAnalysis.id" :analysis-id="activeAnalysis.id" />
           </section>
         </template>
 
+        <AgentWorkspace v-else-if="view === 'agent'" :input="agentInput" :input-issue="agentInputIssue" @edit="switchView('analyze')" @open-caller="openCallerReview" />
+        <CallerWorkspace v-else-if="view === 'callers'" :initial-review-id="callerRecordId" />
         <HistoryPanel
           v-else
           :analyses="history"

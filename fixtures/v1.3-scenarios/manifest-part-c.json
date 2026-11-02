@@ -1,0 +1,286 @@
+[
+  {
+    "id": "safe-evolution",
+    "title": "零售下单 API 的等价方言迁移与兼容扩展",
+    "scenario": "电商后台从 OpenAPI 3.0.3 迁移到 3.1.0，同时支持游客下单和更长备注。nullable:true 迁移为含 null 的 type 集合，整数数量 [1,99] 改写为 (0,100)，这些是同实例集合控制；查询状态 enum 扩张、增加可选 cursor、closed 请求新增可选 clientReference、备注上限放宽、取消 customerId 必填、响应保证已有 status 存在，共六项均保留原合法请求或缩小合法输出集合，不应出现 breaking 或 potentially-breaking。",
+    "baseline": {
+      "entry": "openapi.yaml",
+      "files": [
+        "openapi.yaml",
+        "paths/orders.yaml",
+        "paths/customer.yaml",
+        "schemas/order.yaml",
+        "schemas/new-order.yaml",
+        "schemas/line-item.yaml",
+        "schemas/customer.yaml"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.yaml",
+      "files": [
+        "openapi.yaml",
+        "paths/orders.yaml",
+        "paths/customer.yaml",
+        "schemas/order.yaml",
+        "schemas/new-order.yaml",
+        "schemas/line-item.yaml",
+        "schemas/customer.yaml"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "non-breaking",
+          "location": "paths[\"/orders\"].get.parameters.query[\"status\"].schema.enum"
+        },
+        {
+          "ruleId": "PARAMETER_ADDED_OPTIONAL",
+          "severity": "non-breaking",
+          "location": "paths[\"/orders\"].get.parameters.query[\"cursor\"]"
+        },
+        {
+          "ruleId": "SCHEMA_PROPERTY_ADDED",
+          "severity": "non-breaking",
+          "location": "paths[\"/orders\"].post.requestBody.content[\"application/json\"].schema.properties[\"clientReference\"]"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_RELAXED",
+          "severity": "non-breaking",
+          "location": "paths[\"/orders\"].post.requestBody.content[\"application/json\"].schema.properties[\"note\"].maxLength"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_REMOVED",
+          "severity": "non-breaking",
+          "location": "paths[\"/orders\"].post.requestBody.content[\"application/json\"].schema.properties[\"customerId\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_ADDED",
+          "severity": "non-breaking",
+          "location": "paths[\"/customers/{customerId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].required"
+        }
+      ],
+      "coverageCodes": [],
+      "counterexamples": [
+        {
+          "change": "安全正向见证：取消 customerId 必填、增加可选 clientReference 并放宽 note 上限。",
+          "oldInteraction": "POST /orders，body={\"customerId\":\"c-7\",\"items\":[{\"sku\":\"sku-1\",\"quantity\":1,\"unitPriceCents\":1200}],\"note\":\"gift\"}，不传 clientReference。",
+          "why": "这是旧请求仍被接受的正向见证，不是破坏反例：customerId 仍可传入，clientReference 可省略，短备注仍满足放宽后的上限；原 closed object 也不可能已有此新字段的其他类型值。"
+        },
+        {
+          "change": "安全正向见证：请求状态 enum 扩张并新增可选 cursor。",
+          "oldInteraction": "GET /orders?status=paid，不传 cursor。",
+          "why": "这是输入集合扩张的正向见证：paid 仍在候选 enum 中，新 cursor 非必填，旧客户端无需改变请求；不得将响应 enum 扩张的潜在风险套用于此请求 enum。"
+        },
+        {
+          "change": "安全正向见证：nullable 改写与响应保证已有 status 存在。",
+          "oldInteraction": "GET /customers/c-7，响应={\"customerId\":\"c-7\",\"displayName\":\"Alice\",\"status\":\"active\",\"preferredStore\":null}。",
+          "why": "这是两侧均合法响应的正向见证：nullable:true 和 type:[string,null] 都允许 null；候选保证 status 存在只缩小旧响应允许的输出集合，不会向旧消费端引入新类型或新值。"
+        },
+        {
+          "change": "安全正向见证：整数数量边界从闭区间 [1,99] 改为开区间 (0,100)。",
+          "oldInteraction": "POST /orders，body={\"customerId\":\"c-7\",\"items\":[{\"sku\":\"sku-1\",\"quantity\":99,\"unitPriceCents\":1200}]}；同样以 quantity=1 验证下边界。",
+          "why": "这是边界等价的正向见证：type 仍为 integer，因此 1 和 99 在两侧都有效，0 和 100 在两侧都无效；语法不同并未收紧请求数量范围。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "原样健康检查是稳定控制，不能因为新增业务功能或方言版本迁移而产生任何 finding。"
+        },
+        {
+          "locationPrefix": "paths[\"/orders\"].post.requestBody.content[\"application/json\"].schema.properties[\"items\"].items.properties[\"quantity\"]",
+          "reason": "原 integer minimum:1 maximum:99 与新 exclusiveMinimum:0 exclusiveMaximum:100 接受同一整数集合，1 与 99 仍有效，0 与 100 仍无效。"
+        },
+        {
+          "locationPrefix": "paths[\"/orders\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"orders\"].items.properties[\"customerNote\"]",
+          "reason": "原 type:string + nullable:true 与新 type:[string,null] 都允许字符串和 null，不应被报为响应类型变化。"
+        },
+        {
+          "locationPrefix": "paths[\"/customers/{customerId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"preferredStore\"]",
+          "reason": "第二处 nullable 迁移控制，防止只处理某一个复用模型或层级。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_RELAXED",
+          "locationIncludes": ".properties[\"note\"].maxLength",
+          "old": {
+            "file": "schemas/new-order.yaml",
+            "pointer": "#/properties/note/maxLength"
+          },
+          "new": {
+            "file": "schemas/new-order.yaml",
+            "pointer": "#/properties/note/maxLength"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "locationIncludes": ".parameters.query[\"status\"].schema.enum",
+          "old": {
+            "file": "paths/orders.yaml",
+            "pointer": "#/get/parameters/0/schema/enum"
+          },
+          "new": {
+            "file": "paths/orders.yaml",
+            "pointer": "#/get/parameters/0/schema/enum"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "partner-webhooks",
+    "title": "合作伙伴通知平台：REST 兼容性与异步通知覆盖边界",
+    "scenario": "合作伙伴平台同时改动注册 REST API、投递回执模型、服务地址、webhook 和动态 callback。REST 部分有新增必填 region、已有 deliveryMode 改为必填、回执 deliveryId 从字符串变整数、响应状态 enum 扩张及 target.oneOf 新增 queue 分支。出站通知 orderId 同样改成整数并新增 eventVersion，回调 URL 增加 version=2，servers 改为 /v2；这三类异步/路由变化必须人工验证，当前引擎不分析 webhook/callback/servers，不能因缺少相应 finding 认定安全。组合 schema 也只能给出潜在风险与 partial 覆盖。",
+    "baseline": {
+      "entry": "openapi.yaml",
+      "files": [
+        "openapi.yaml",
+        "paths/partners.yaml",
+        "paths/partner.yaml",
+        "paths/delivery.yaml",
+        "schemas/register-partner.yaml",
+        "schemas/partner.yaml",
+        "schemas/delivery.yaml",
+        "schemas/delivery-target.yaml",
+        "notifications/order-created.yaml",
+        "notifications/callback.yaml",
+        "notifications/event.yaml"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.yaml",
+      "files": [
+        "openapi.yaml",
+        "paths/partners.yaml",
+        "paths/partner.yaml",
+        "paths/delivery.yaml",
+        "schemas/register-partner.yaml",
+        "schemas/partner.yaml",
+        "schemas/delivery.yaml",
+        "schemas/delivery-target.yaml",
+        "notifications/order-created.yaml",
+        "notifications/callback.yaml",
+        "notifications/event.yaml"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "partial",
+      "findings": [
+        {
+          "ruleId": "PARAMETER_ADDED_REQUIRED",
+          "severity": "breaking",
+          "location": "paths[\"/partners\"].post.parameters.query[\"region\"]"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_ADDED",
+          "severity": "breaking",
+          "location": "paths[\"/partners\"].post.requestBody.content[\"application/json\"].schema.properties[\"deliveryMode\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "severity": "breaking",
+          "location": "paths[\"/deliveries/{deliveryId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"deliveryId\"].type"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/deliveries/{deliveryId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_COMPOSITION_CHANGED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/deliveries/{deliveryId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"target\"].oneOf"
+        }
+      ],
+      "coverageCodes": [
+        "CALLBACKS_NOT_ANALYSED",
+        "SCHEMA_COMPOSITION_PARTIAL",
+        "SERVERS_NOT_ANALYSED",
+        "WEBHOOKS_NOT_ANALYSED"
+      ],
+      "counterexamples": [
+        {
+          "change": "注册请求新增必填查询参数 region。",
+          "oldInteraction": "POST /partners，body={\"displayName\":\"Northwind\",\"callbackUrl\":\"https://partner.example.invalid/hook\",\"deliveryMode\":\"immediate\"}，不传 region。",
+          "why": "旧契约允许没有 region 的注册请求，新契约明确拒绝，应为 breaking。"
+        },
+        {
+          "change": "已有 deliveryMode 属性从可选改为必填。",
+          "oldInteraction": "POST /partners?region=apac，body={\"displayName\":\"Northwind\",\"callbackUrl\":\"https://partner.example.invalid/hook\"}。",
+          "why": "旧契约允许省略 deliveryMode；即使调用者适配 region，原请求体仍不符合新契约，应单独报告 breaking。"
+        },
+        {
+          "change": "回执中的 deliveryId 从字符串改成整数。",
+          "oldInteraction": "旧客户端按字符串读取 {\"deliveryId\":\"d-42\",\"status\":\"queued\",\"attemptCount\":0,\"target\":{\"kind\":\"http\",\"url\":\"https://partner.example.invalid/hook\"}}。",
+          "why": "新响应允许 deliveryId:42，旧字符串反序列化模型或对 d- 前缀的逻辑会失败，属于响应类型 breaking。"
+        },
+        {
+          "change": "回执响应状态新增 permanently_failed。",
+          "oldInteraction": "旧客户端只处理 queued、delivered 两个分支，对未知状态抛错。",
+          "why": "新输出集合扩张，存在穷举客户端不兼容，应为 potentially-breaking，而非请求 enum 扩张的安全结论。"
+        },
+        {
+          "change": "target.oneOf 增加 queue 分支。",
+          "oldInteraction": "旧客户端仅识别 {\"kind\":\"email\",\"address\":\"ops@example.invalid\"} 和 {\"kind\":\"http\",\"url\":\"https://partner.example.invalid/hook\"}。",
+          "why": "新响应可包含 {\"kind\":\"queue\",\"queueName\":\"partner-42\"}，组合实例集合与实际消费端需人工验证；应提示潜在风险，不能按分支数直接证明安全。"
+        },
+        {
+          "change": "通知 event.orderId 改为整数并新增必填 eventVersion。",
+          "oldInteraction": "伙伴 webhook/callback 接收器原本按 {\"eventId\":\"ev-7\",\"eventType\":\"order.created\",\"orderId\":\"o-17\",\"totalCents\":1200} 解析，并拒绝未知字段。",
+          "why": "新发送载荷的类型及字段集合可能破坏对方接收器；WEBHOOKS_NOT_ANALYSED/CALLBACKS_NOT_ANALYSED 表明此风险尚未由 REST 规则分析，须以真实接收器或独立验证器复核。"
+        },
+        {
+          "change": "callbacks.deliveryNotice 的目标表达式增加 ?version=2。",
+          "oldInteraction": "旧接收器只为登记的 callbackUrl 原路由配置签名校验和网关规则，不接受新增查询串。",
+          "why": "运行时表达式路由与接收器部署语义未覆盖；没有 callback finding 不能证明请求到达和签名仍然有效。"
+        },
+        {
+          "change": "服务地址由 /v1 改为 /v2。",
+          "oldInteraction": "伙伴客户端固定调用 https://partners.example.invalid/v1，原部署未提供重定向。",
+          "why": "服务器路由、旧入口保留及部署兼容性不属于当前静态规则，SERVERS_NOT_ANALYSED 必须促使人工验证。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "健康检查路径、模型和响应保持一致；服务器覆盖告警不能伪造成健康检查 schema breaking。"
+        },
+        {
+          "locationPrefix": "paths[\"/partners/{partnerId}\"].get",
+          "reason": "同步伙伴查询参数与响应模型未修改，是区分共享依赖和通知变化的稳定业务控制。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "locationIncludes": ".properties[\"deliveryId\"].type",
+          "old": {
+            "file": "schemas/delivery.yaml",
+            "pointer": "#/properties/deliveryId/type"
+          },
+          "new": {
+            "file": "schemas/delivery.yaml",
+            "pointer": "#/properties/deliveryId/type"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_COMPOSITION_CHANGED",
+          "locationIncludes": ".properties[\"target\"].oneOf",
+          "old": {
+            "file": "schemas/delivery-target.yaml",
+            "pointer": "#/oneOf"
+          },
+          "new": {
+            "file": "schemas/delivery-target.yaml",
+            "pointer": "#/oneOf"
+          }
+        }
+      ]
+    }
+  }
+]

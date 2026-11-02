@@ -16,3 +16,10 @@ config/llm-providers.json
 !**/data/analyses/.gitkeep
 apps/web/public/demo/*.json
 contractguard-report.*
+
+# Verified upstream tools are installed locally, never committed.
+.tools/
+.impeccable/review/
+data/agent-cli/
+data/caller-reviews/
+agent-review.md

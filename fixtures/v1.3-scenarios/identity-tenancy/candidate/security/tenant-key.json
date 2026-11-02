@@ -1,0 +1,5 @@
+{
+  "type": "apiKey",
+  "in": "cookie",
+  "name": "tenant_token"
+}

@@ -4,7 +4,11 @@ export type ContractGuardErrorCode =
   | "UNSUPPORTED_SPEC_VERSION"
   | "INVALID_REFERENCE"
   | "EXTERNAL_REFERENCE_UNSUPPORTED"
-  | "INVALID_POLICY";
+  | "INVALID_POLICY"
+  | "INVALID_CONSUMER_EVIDENCE"
+  | "INVALID_REGRESSION_PACK"
+  | "INVALID_BUNDLE"
+  | "BUNDLE_LIMIT_EXCEEDED";
 
 export class ContractGuardError extends Error {
   readonly code: ContractGuardErrorCode;

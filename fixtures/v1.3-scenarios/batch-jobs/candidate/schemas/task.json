@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "required": [
+    "taskId",
+    "input"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string"
+    },
+    "input": {
+      "type": "string"
+    }
+  }
+}

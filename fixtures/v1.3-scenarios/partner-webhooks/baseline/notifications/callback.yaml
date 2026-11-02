@@ -1,0 +1,13 @@
+'{$request.body#/callbackUrl}':
+  post:
+    operationId: receiveDeliveryNotice
+    summary: Partner receives the asynchronous delivery notice
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ./event.yaml
+    responses:
+      '204':
+        description: Notice accepted

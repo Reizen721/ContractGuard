@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "required": [
+    "cartId",
+    "currency",
+    "amountMinor"
+  ],
+  "properties": {
+    "cartId": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD",
+        "EUR",
+        "CNY"
+      ]
+    },
+    "amountMinor": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

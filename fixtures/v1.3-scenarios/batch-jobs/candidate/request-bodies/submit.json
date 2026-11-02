@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/submit.json"
+      }
+    },
+    "application/cbor": {
+      "schema": {
+        "$ref": "../schemas/submit.json"
+      }
+    }
+  }
+}

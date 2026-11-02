@@ -1,0 +1,4 @@
+[
+  { "method": "GET", "path": "/orders/current", "from": "customerName", "to": "displayName" },
+  { "method": "GET", "path": "/profile", "from": "email", "to": "contactEmail" }
+]

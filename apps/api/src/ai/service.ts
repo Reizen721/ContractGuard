@@ -1,4 +1,4 @@
-import type { StoredAnalysis } from '../types.js';
+import { createHash } from 'node:crypto';
 import { requestOpenAiChatCompletion, type OpenAiChatAdapterOptions } from './adapters/openai-chat.js';
 import {
   createLegacyDeepSeekConfiguration,
@@ -7,10 +7,11 @@ import {
   loadAiConfiguration,
   type AiAdapterKind,
   type AiRuntimeConfig,
+  type AiProfileConfig,
 } from './config.js';
-import { AI_PROMPT_VERSION } from './prompt.js';
+import { AI_PROMPT_VERSION, selectFindings } from './prompt.js';
 import { parseAndValidateGeneratedReview } from './review-schema.js';
-import { AiServiceError, type AiProviderStatus, type AiReviewService, type AiServiceStatus } from './types.js';
+import { AiServiceError, type AiProviderStatus, type AiReviewRequest, type AiReviewService, type AiServiceStatus } from './types.js';
 
 type Adapter = (options: OpenAiChatAdapterOptions) => ReturnType<typeof requestOpenAiChatCompletion>;
 
@@ -43,6 +44,21 @@ export function createMultiProviderAiService(options: MultiProviderAiServiceOpti
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const now = options.now ?? (() => new Date());
 
+  function selectedProfile(request: AiReviewRequest): AiProfileConfig {
+    if (!config.enabled) throw new AiServiceError(503, 'AI_DISABLED', 'AI review is disabled on this server.');
+    const requestedId = request.providerId ?? config.activeProfile;
+    if (request.providerId !== undefined && request.providerId !== config.activeProfile && !config.allowRequestProfileOverride) {
+      throw new AiServiceError(400, 'AI_PROVIDER_OVERRIDE_DISABLED', 'Selecting a different AI provider is disabled on this server.');
+    }
+    const profile = config.profiles.find((candidate) => candidate.id === requestedId);
+    if (!profile) throw new AiServiceError(400, 'AI_PROVIDER_NOT_FOUND', 'The requested AI provider is not configured on this server.');
+    if (!profile.enabled) throw new AiServiceError(503, 'AI_PROVIDER_DISABLED', 'The requested AI provider is disabled on this server.');
+    if (profile.auth.type === 'bearer' && resolveApiKey(profile.id, profile.auth, environment, directSecrets) === undefined) {
+      throw new AiServiceError(503, 'AI_NOT_CONFIGURED', `AI review is enabled but ${profile.displayName} credentials are not configured.`);
+    }
+    return profile;
+  }
+
   return {
     status(): AiServiceStatus {
       const providers = config.profiles.map((profile) => statusForProfile(config, profile.id, environment, directSecrets));
@@ -64,28 +80,20 @@ export function createMultiProviderAiService(options: MultiProviderAiServiceOpti
       };
     },
 
+    cacheIdentity(request) {
+      const profile = selectedProfile(request);
+      // Runtime configuration can contain a legacyApiKey; never hash or persist it.
+      return createHash('sha256').update(JSON.stringify({ profile, limits: config.defaults, promptVersion: AI_PROMPT_VERSION })).digest('hex');
+    },
+
     async review(analysis, request, callOptions) {
-      if (!config.enabled) {
-        throw new AiServiceError(503, 'AI_DISABLED', 'AI review is disabled on this server.');
-      }
-      const requestedId = request.providerId ?? config.activeProfile;
-      if (request.providerId !== undefined
-        && request.providerId !== config.activeProfile
-        && !config.allowRequestProfileOverride) {
-        throw new AiServiceError(400, 'AI_PROVIDER_OVERRIDE_DISABLED', 'Selecting a different AI provider is disabled on this server.');
-      }
-      const profile = config.profiles.find((candidate) => candidate.id === requestedId);
-      if (profile === undefined) {
-        throw new AiServiceError(400, 'AI_PROVIDER_NOT_FOUND', 'The requested AI provider is not configured on this server.');
-      }
-      if (!profile.enabled) {
-        throw new AiServiceError(503, 'AI_PROVIDER_DISABLED', 'The requested AI provider is disabled on this server.');
-      }
+      const profile = selectedProfile(request);
       const apiKey = resolveApiKey(profile.id, profile.auth, environment, directSecrets);
       if (profile.auth.type === 'bearer' && apiKey === undefined) {
         throw new AiServiceError(503, 'AI_NOT_CONFIGURED', `AI review is enabled but ${profile.displayName} credentials are not configured.`);
       }
 
+      const includedChangeIds = selectFindings(analysis.changes, config.defaults.maxChanges).map((change) => change.id);
       const adapter = ADAPTER_REGISTRY[profile.adapter];
       const completion = await adapter({
         profile,
@@ -106,9 +114,25 @@ export function createMultiProviderAiService(options: MultiProviderAiServiceOpti
       }
       const generated = parseAndValidateGeneratedReview(
         completion.content,
-        new Set(analysis.changes.map((change) => change.id)),
+        new Set(includedChangeIds),
         profile.displayName,
       );
+      const coverage = {
+        totalFindings: analysis.changes.length,
+        includedFindings: includedChangeIds.length,
+        omittedFindings: analysis.changes.length - includedChangeIds.length,
+        includedChangeIds,
+      };
+      const serverCaveats: string[] = [];
+      if (coverage.omittedFindings > 0) serverCaveats.push(request.language === 'zh-CN'
+        ? `本次 AI 解读仅收到 ${coverage.includedFindings}/${coverage.totalFindings} 条变更，另有 ${coverage.omittedFindings} 条未提供给模型；请复核完整确定性报告。`
+        : `The model received ${coverage.includedFindings}/${coverage.totalFindings} findings; ${coverage.omittedFindings} were omitted. Review the complete deterministic report.`);
+      if (analysis.summary.breaking > 0 && generated.overview.riskLevel === 'low') serverCaveats.push(request.language === 'zh-CN'
+        ? 'AI 的低风险评级仅代表解释层意见；确定性报告仍包含 breaking 变更，该评级不能覆盖确定性门禁。'
+        : 'The AI low-risk opinion is an explanatory assessment; the deterministic report still contains breaking findings and its gate is unchanged.');
+      if (analysis.consumerImpact && analysis.consumerImpact.gate !== 'pass') serverCaveats.push(request.language === 'zh-CN'
+        ? `调用方样例门禁为 ${analysis.consumerImpact.gate}：${analysis.consumerImpact.summary.regressions} 项回归、${analysis.consumerImpact.summary.invalidBaselines + analysis.consumerImpact.summary.inconclusive} 项无效或不完整证据。AI 意见不能覆盖此门禁；这仍只是已提交样例的离线检查。`
+        : `The consumer evidence gate is ${analysis.consumerImpact.gate}: ${analysis.consumerImpact.summary.regressions} regressions and ${analysis.consumerImpact.summary.invalidBaselines + analysis.consumerImpact.summary.inconclusive} invalid/inconclusive checks. AI opinions cannot override this gate; it only covers supplied offline examples.`);
       return {
         schemaVersion: '1.0',
         analysisId: analysis.id,
@@ -119,6 +143,10 @@ export function createMultiProviderAiService(options: MultiProviderAiServiceOpti
         generatedAt: now().toISOString(),
         promptVersion: AI_PROMPT_VERSION,
         ...generated,
+        language: request.language,
+        ...(request.focus === undefined ? {} : { focus: request.focus }),
+        coverage,
+        caveats: [...generated.caveats, ...serverCaveats],
         ...(completion.usage === undefined ? {} : { usage: completion.usage }),
       };
     },

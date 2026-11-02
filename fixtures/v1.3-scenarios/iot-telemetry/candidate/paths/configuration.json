@@ -1,0 +1,25 @@
+{
+  "put": {
+    "operationId": "setDeviceConfiguration",
+    "parameters": [
+      {
+        "$ref": "../parameters/device-id.json"
+      }
+    ],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "../schemas/configuration.json"
+          }
+        }
+      }
+    },
+    "responses": {
+      "204": {
+        "description": "Configuration accepted"
+      }
+    }
+  }
+}

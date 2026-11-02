@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": [
+    "sensorId",
+    "value"
+  ],
+  "properties": {
+    "sensorId": {
+      "type": "string"
+    },
+    "value": {
+      "$ref": "./measurement.json",
+      "maximum": 80
+    }
+  }
+}

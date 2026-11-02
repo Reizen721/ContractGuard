@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -8,6 +8,9 @@ import { ENGINE_VERSION } from '@contractguard/core';
 import { createApp } from './app.js';
 import { AiConfigurationError, parseAiConfiguration, type AiRuntimeConfig } from './ai/config.js';
 import { createMultiProviderAiService } from './ai/service.js';
+import { AiReviewCoordinator } from './ai/review-coordinator.js';
+import { AiReviewStore } from './ai/review-store.js';
+import type { AiReview } from './ai/types.js';
 
 const baseline = {
   openapi: '3.1.0',
@@ -874,6 +877,332 @@ describe('ContractGuard API', () => {
       .send({ language: 'fr', focus: 'x'.repeat(501) })
       .expect(400);
     assert.equal(invalid.body.error.code, 'INVALID_AI_REVIEW_REQUEST');
+    await request(app).post(`/api/analyses/${created.body.id as string}/ai-review`).send({ force: 'true' }).expect(400);
+  });
+
+  it('binds AI evidence to only the actual supplied finding set', async () => {
+    let omittedId = '';
+    let captured = '';
+    const app = createApp({
+      dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret', maxChanges: 1 },
+      aiFetch: async (_input, init) => {
+        captured = String(init?.body);
+        return aiResponse({ ...minimalAiReview, keyRisks: [{
+          changeId: omittedId, title: 'Omitted evidence', explanation: 'Not actually supplied.',
+          affectedConsumers: [], remediation: 'Review.', priority: 'P1',
+        }] });
+      },
+    });
+    const expanded = { ...baseline, paths: { ...baseline.paths, '/other': baseline.paths['/pets/{id}'] } };
+    const created = await request(app).post('/api/analyses').send({ baseline: expanded, candidate }).expect(201);
+    assert.ok(created.body.changes.length > 1);
+    omittedId = created.body.changes[1].id;
+    const failed = await request(app).post(`/api/analyses/${created.body.id}/ai-review`).send({}).expect(502);
+    assert.equal(failed.body.error.code, 'AI_INVALID_RESPONSE');
+    const sent = JSON.parse(captured).messages[1].content as string;
+    const data = JSON.parse(sent.split('<ANALYSIS_DATA>\n')[1]!.split('\n</ANALYSIS_DATA>')[0]!);
+    assert.equal(data.analysis.includedFindings, 1);
+    assert.equal(data.analysis.findings.some((finding: { id: string }) => finding.id === omittedId), false);
+    const history = await request(app).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(200);
+    assert.deepEqual(history.body.reviews, []);
+  });
+
+  it('reports bounded AI coverage and warns about low-risk opinions without changing deterministic verdicts', async () => {
+    const app = createApp({
+      dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret', maxChanges: 1 },
+      aiFetch: async () => aiResponse({ ...minimalAiReview, overview: { ...minimalAiReview.overview, riskLevel: 'low' } }),
+    });
+    const expanded = { ...baseline, paths: { ...baseline.paths, '/other': baseline.paths['/pets/{id}'] } };
+    const created = await request(app).post('/api/analyses').send({ baseline: expanded, candidate }).expect(201);
+    const review = await request(app).post(`/api/analyses/${created.body.id}/ai-review`).send({}).expect(200);
+    assert.deepEqual(review.body.coverage, {
+      totalFindings: created.body.changes.length, includedFindings: 1,
+      omittedFindings: created.body.changes.length - 1, includedChangeIds: [created.body.changes[0].id],
+    });
+    assert.equal(review.body.promptVersion, 'ai-explainer-v4');
+    assert.equal(review.body.overview.riskLevel, 'low');
+    assert.match(review.body.caveats.join('\n'), /未提供给模型/);
+    assert.match(review.body.caveats.join('\n'), /不能覆盖确定性门禁/);
+    const loaded = await request(app).get(`/api/analyses/${created.body.id}`).expect(200);
+    assert.equal(loaded.body.compatible, created.body.compatible);
+    assert.equal(loaded.body.score, created.body.score);
+  });
+
+  it('persists AI reviews across app restarts, reuses matching requests, and explicitly regenerates', async () => {
+    let calls = 0;
+    const options = {
+      dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'never-persist-this-secret' },
+      aiFetch: async () => { calls += 1; return aiResponse(minimalAiReview); },
+    };
+    const app = createApp(options);
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const url = `/api/analyses/${created.body.id}/ai-review`;
+    const first = await request(app).post(url).send({ language: 'zh-CN', focus: '  migration  ' }).expect(200);
+    assert.match(first.body.id, /^[0-9a-f-]{36}$/);
+    assert.equal(first.body.language, 'zh-CN');
+    assert.equal(first.body.focus, 'migration');
+    const restarted = createApp(options);
+    const second = await request(restarted).post(url).send({ focus: 'migration' }).expect(200);
+    assert.equal(second.body.id, first.body.id);
+    assert.equal(calls, 1);
+    const fresh = await request(restarted).post(url).send({ focus: 'migration', force: true }).expect(200);
+    assert.notEqual(fresh.body.id, first.body.id);
+    assert.equal(calls, 2);
+    const reusedFresh = await request(restarted).post(url).send({ focus: 'migration' }).expect(200);
+    assert.equal(reusedFresh.body.id, fresh.body.id);
+    assert.equal(calls, 2);
+    const history = await request(restarted).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(200);
+    assert.equal(history.body.reviews.length, 2);
+    assert.equal(history.body.reviews[0].id, fresh.body.id);
+    for (const file of await readdir(join(directory, 'ai-reviews', created.body.id))) {
+      assert.doesNotMatch(await readFile(join(directory, 'ai-reviews', created.body.id, file), 'utf8'), /never-persist-this-secret/);
+    }
+  });
+
+  it('keeps saved AI reports readable and exportable while AI is disabled, and clears them with the analysis', async () => {
+    const app = createApp({ dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret' }, aiFetch: async () => aiResponse(minimalAiReview) });
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const generated = await request(app).post(`/api/analyses/${created.body.id}/ai-review`).send({}).expect(200);
+    const disabled = createApp({ dataDirectory: directory, serveWeb: false, aiConfig: { enabled: false } });
+    const history = await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(200);
+    assert.equal(history.body.reviews[0].id, generated.body.id);
+    const json = await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews/${generated.body.id}/report?format=json`).expect(200);
+    assert.equal(json.body.id, generated.body.id);
+    const markdown = await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews/${generated.body.id}/report?format=markdown`).expect(200);
+    assert.match(markdown.text, /AI explanations are untrusted advice/);
+    await request(disabled).post(`/api/analyses/${created.body.id}/ai-review`).send({}).expect(503);
+    await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews/${generated.body.id}/report?format=html`).expect(400);
+    await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews/not-an-id/report`).expect(400);
+    await request(disabled).delete(`/api/analyses/${created.body.id}`).expect(204);
+    await request(disabled).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(404);
+    assert.deepEqual(await new AiReviewStore(directory).list(created.body.id), []);
+  });
+
+  it('invalidates AI cache for provider configuration, language, focus, and different analysis identities', async () => {
+    let calls = 0;
+    const fakeFetch: typeof fetch = async () => { calls += 1; return aiResponse(minimalAiReview); };
+    const options = { dataDirectory: directory, serveWeb: false, aiFetch: fakeFetch,
+      aiConfig: { enabled: true, apiKey: 'test-secret', model: 'model-a' } };
+    const app = createApp(options);
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const url = `/api/analyses/${created.body.id}/ai-review`;
+    await request(app).post(url).send({}).expect(200);
+    await request(app).post(url).send({ language: 'en' }).expect(200);
+    await request(app).post(url).send({ focus: 'clients' }).expect(200);
+    const changed = createApp({ ...options, aiConfig: { ...options.aiConfig, model: 'model-b' } });
+    const changedResult = await request(changed).post(url).send({}).expect(200);
+    assert.equal(changedResult.body.model, 'model-b');
+    const another = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const anotherResult = await request(app).post(`/api/analyses/${another.body.id}/ai-review`).send({}).expect(200);
+    assert.equal(anotherResult.body.analysisId, another.body.id);
+    assert.equal(calls, 5);
+    const noCredential = createApp({ ...options, aiConfig: { ...options.aiConfig, apiKey: '' } });
+    await request(noCredential).post(url).send({}).expect(503);
+  });
+
+  it('ignores corrupt or mismatched AI history records without breaking good reports', async () => {
+    const app = createApp({ dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret' }, aiFetch: async () => aiResponse(minimalAiReview) });
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const good = await request(app).post(`/api/analyses/${created.body.id}/ai-review`).send({}).expect(200);
+    const folder = join(directory, 'ai-reviews', created.body.id);
+    await writeFile(join(folder, '00000000-0000-4000-8000-000000000001.json'), '{}');
+    await writeFile(join(folder, '00000000-0000-4000-8000-000000000002.json'), '{broken');
+    const mismatched = JSON.parse(await readFile(join(folder, `${good.body.id}.json`), 'utf8'));
+    mismatched.review.analysisId = '00000000-0000-4000-8000-000000000003';
+    await writeFile(join(folder, '00000000-0000-4000-8000-000000000004.json'), JSON.stringify(mismatched));
+    const list = await request(app).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(200);
+    assert.deepEqual(list.body.reviews.map((review: { id: string }) => review.id), [good.body.id]);
+  });
+
+  it('invalidates saved AI results when engine, source, policy, or service identity changes', async () => {
+    const analysisApp = createApp({ dataDirectory: directory, serveWeb: false });
+    const created = await request(analysisApp).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    let calls = 0;
+    const service = createMultiProviderAiService({ config: multiProviderConfig(),
+      environment: { TEST_DEEPSEEK_API_KEY: 'test-secret' },
+      fetch: async () => { calls += 1; return aiResponse(minimalAiReview); } });
+    const reviewStore = new AiReviewStore(directory);
+    const coordinator = new AiReviewCoordinator(service, reviewStore);
+    const first = await coordinator.review(created.body, { language: 'zh-CN' });
+    const engine = await coordinator.review({ ...created.body, engineVersion: 'future-engine' }, { language: 'zh-CN' });
+    const source = await coordinator.review({ ...created.body, source: { ...created.body.source,
+      new: { ...created.body.source.new, fingerprint: { algorithm: 'sha256', value: '1'.repeat(64) } } } }, { language: 'zh-CN' });
+    const policy = await coordinator.review({ ...created.body, policy: { ...created.body.policy,
+      fingerprint: { algorithm: 'sha256', value: '2'.repeat(64) } } }, { language: 'zh-CN' });
+    const changed = new AiReviewCoordinator({ ...service,
+      cacheIdentity: (input) => `${service.cacheIdentity!(input)}:new-profile-or-prompt-identity` }, reviewStore);
+    const identity = await changed.review(created.body, { language: 'zh-CN' });
+    assert.equal(new Set([first.id, engine.id, source.id, policy.id, identity.id]).size, 5);
+    assert.equal(calls, 5);
+  });
+
+  it('does not cache failed AI generations and escapes model content in Markdown exports', async () => {
+    let calls = 0;
+    const app = createApp({ dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret' }, aiFetch: async () => {
+        calls += 1;
+        if (calls === 1) return new Response('provider internal text', { status: 503 });
+        return aiResponse({ ...minimalAiReview, overview: { ...minimalAiReview.overview,
+          headline: '<img src=x onerror=alert(1)> [click](https://example.test)' } });
+      } });
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const url = `/api/analyses/${created.body.id}/ai-review`;
+    await request(app).post(url).send({}).expect(502);
+    assert.deepEqual((await request(app).get(`/api/analyses/${created.body.id}/ai-reviews`).expect(200)).body.reviews, []);
+    const generated = await request(app).post(url).send({}).expect(200);
+    const reused = await request(app).post(url).send({}).expect(200);
+    assert.equal(reused.body.id, generated.body.id);
+    assert.equal(calls, 2);
+    const markdown = await request(app).get(`/api/analyses/${created.body.id}/ai-reviews/${generated.body.id}/report?format=markdown`).expect(200);
+    assert.doesNotMatch(markdown.text, /<img/);
+    assert.match(markdown.text, /&lt;img/);
+    assert.ok(markdown.text.includes('\\[click\\]\\('));
+  });
+
+  it('merges concurrent AI requests and keeps the shared request alive for remaining subscribers', async () => {
+    const analysisApp = createApp({ dataDirectory: directory, serveWeb: false });
+    const created = await request(analysisApp).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    let calls = 0;
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const began = new Promise<void>((resolve) => { started = resolve; });
+    let upstreamAborted = false;
+    const service = createMultiProviderAiService({
+      config: multiProviderConfig(), environment: { TEST_DEEPSEEK_API_KEY: 'test-secret' },
+      fetch: async (_input, init) => {
+        calls += 1;
+        init?.signal?.addEventListener('abort', () => { upstreamAborted = true; }, { once: true });
+        started();
+        await gate;
+        return aiResponse(minimalAiReview);
+      },
+    });
+    const coordinator = new AiReviewCoordinator(service, new AiReviewStore(directory));
+    const controller = new AbortController();
+    const cancelled = coordinator.review(created.body, { language: 'zh-CN' }, controller.signal);
+    const cancelledAssertion = assert.rejects(cancelled, (error: unknown) => (error as { status: number }).status === 499);
+    const kept = coordinator.review(created.body, { language: 'zh-CN' });
+    const third = coordinator.review(created.body, { language: 'zh-CN' });
+    await began;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+    await cancelledAssertion;
+    assert.equal(upstreamAborted, false);
+    release();
+    const [left, right] = await Promise.all([kept, third]);
+    assert.equal(left.id, right.id);
+    assert.equal(calls, 1);
+    assert.equal((await new AiReviewStore(directory).list(created.body.id)).length, 1);
+  });
+
+  it('does not resurrect saved AI reports when an analysis is deleted during generation', async () => {
+    let started!: () => void;
+    let release!: () => void;
+    const began = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const app = createApp({ dataDirectory: directory, serveWeb: false,
+      aiConfig: { enabled: true, apiKey: 'test-secret' }, aiFetch: async () => {
+        started(); await gate; return aiResponse(minimalAiReview);
+      } });
+    const created = await request(app).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const pending = request(app).post(`/api/analyses/${created.body.id}/ai-review`).send({}).then((value) => value);
+    await began;
+    await request(app).delete(`/api/analyses/${created.body.id}`).expect(204);
+    release();
+    const response = await pending;
+    assert.equal(response.status, 499);
+    assert.deepEqual(await new AiReviewStore(directory).list(created.body.id), []);
+  });
+
+  it('cancels the upstream operation when its last coordinator subscriber disconnects', async () => {
+    const analysisApp = createApp({ dataDirectory: directory, serveWeb: false });
+    const created = await request(analysisApp).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    let started!: () => void;
+    let aborted!: () => void;
+    const began = new Promise<void>((resolve) => { started = resolve; });
+    const stopped = new Promise<void>((resolve) => { aborted = resolve; });
+    const service = createMultiProviderAiService({ config: multiProviderConfig(),
+      environment: { TEST_DEEPSEEK_API_KEY: 'test-secret' }, fetch: async (_input, init) => new Promise((_resolve, reject) => {
+        started();
+        init?.signal?.addEventListener('abort', () => { aborted(); reject(new DOMException('abort', 'AbortError')); }, { once: true });
+      }) });
+    const reviewStore = new AiReviewStore(directory);
+    const coordinator = new AiReviewCoordinator(service, reviewStore);
+    const controller = new AbortController();
+    const pending = coordinator.review(created.body, { language: 'zh-CN' }, controller.signal);
+    const assertion = assert.rejects(pending, (error: unknown) => (error as { status: number }).status === 499);
+    await began;
+    controller.abort();
+    await Promise.all([assertion, stopped]);
+    assert.deepEqual(await reviewStore.list(created.body.id), []);
+  });
+
+  it('cleans an AI report when deletion races an already-started disk save', async () => {
+    const analysisApp = createApp({ dataDirectory: directory, serveWeb: false });
+    const created = await request(analysisApp).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    let writing!: () => void;
+    let release!: () => void;
+    const wrote = new Promise<void>((resolve) => { writing = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    class DelayedStore extends AiReviewStore {
+      override async save(analysisId: string, cacheKey: string, review: AiReview): Promise<AiReview> {
+        writing();
+        await gate;
+        return super.save(analysisId, cacheKey, review);
+      }
+    }
+    const reviewStore = new DelayedStore(directory);
+    const service = createMultiProviderAiService({ config: multiProviderConfig(),
+      environment: { TEST_DEEPSEEK_API_KEY: 'test-secret' }, fetch: async () => aiResponse(minimalAiReview) });
+    const coordinator = new AiReviewCoordinator(service, reviewStore);
+    const pending = coordinator.review(created.body, { language: 'zh-CN' });
+    const assertion = assert.rejects(pending, (error: unknown) => (error as { status: number }).status === 499);
+    await wrote;
+    await coordinator.discardAnalysis(created.body.id);
+    release();
+    await assertion;
+    assert.deepEqual(await reviewStore.list(created.body.id), []);
+  });
+
+  it('removes only the new report when its final subscriber cancels during a disk save', async () => {
+    const analysisApp = createApp({ dataDirectory: directory, serveWeb: false });
+    const created = await request(analysisApp).post('/api/analyses').send({ baseline, candidate }).expect(201);
+    const service = createMultiProviderAiService({ config: multiProviderConfig(),
+      environment: { TEST_DEEPSEEK_API_KEY: 'test-secret' }, fetch: async () => aiResponse(minimalAiReview) });
+    const previous = await new AiReviewCoordinator(service, new AiReviewStore(directory)).review(created.body, { language: 'zh-CN' });
+    let writing!: () => void;
+    let release!: () => void;
+    let finished!: () => void;
+    const wrote = new Promise<void>((resolve) => { writing = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const cleaned = new Promise<void>((resolve) => { finished = resolve; });
+    class DelayedStore extends AiReviewStore {
+      override async save(analysisId: string, cacheKey: string, review: AiReview): Promise<AiReview> {
+        writing(); await gate;
+        return super.save(analysisId, cacheKey, review);
+      }
+      override async deleteReview(analysisId: string, reviewId: string): Promise<void> {
+        await super.deleteReview(analysisId, reviewId);
+        finished();
+      }
+    }
+    const reviewStore = new DelayedStore(directory);
+    const coordinator = new AiReviewCoordinator(service, reviewStore);
+    const controller = new AbortController();
+    const pending = coordinator.review(created.body, { language: 'zh-CN', force: true }, controller.signal);
+    const assertion = assert.rejects(pending, (error: unknown) => (error as { status: number }).status === 499);
+    await wrote;
+    controller.abort();
+    await assertion;
+    release();
+    await cleaned;
+    assert.deepEqual((await reviewStore.list(created.body.id)).map((review) => review.id), [previous.id]);
   });
 
   it('rejects a non-JSON body as a client error', async () => {
@@ -891,3 +1220,8 @@ describe('ContractGuard API', () => {
     assert.doesNotMatch(JSON.stringify(response.body), /not-a-directory|EEXIST/i);
   });
 });
+
+function aiResponse(review: unknown): Response {
+  return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(review) } }] }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } });
+}

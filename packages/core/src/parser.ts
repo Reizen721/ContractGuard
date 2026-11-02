@@ -1,6 +1,7 @@
 import { parse as parseYaml } from "yaml";
 
 import { ContractGuardError } from "./errors.js";
+import { conjoinSchemaSiblings, isOas30 } from "./dialect.js";
 import type { OpenApiDocument, OpenApiInput, ParsedOpenApi } from "./types.js";
 
 const SUPPORTED_OPENAPI_VERSION = /^3\.(?:0|1)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -146,7 +147,7 @@ export function resolveLocalRef(document: OpenApiDocument, reference: string): u
   return current;
 }
 
-/** Resolve a Reference Object while retaining legal sibling fields (OpenAPI 3.1). */
+/** Resolve a non-Schema Reference Object, not arbitrary JSON Schema applicators. */
 export function resolveNode(
   document: OpenApiDocument,
   value: unknown,
@@ -161,6 +162,52 @@ export function resolveNode(
   const resolved = resolveNode(document, target, nextVisited);
   if (!isRecord(resolved)) return resolved;
 
-  const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
+  const siblings = isOas30(document) ? {} : Object.fromEntries(Object.entries(value).filter(([key]) => key === 'summary' || key === 'description'));
   return { ...resolved, ...siblings };
+}
+
+/** Schema $ref siblings in 3.1 are a conjunction; they never overwrite validation constraints. */
+export function resolveSchemaNode(
+  document: OpenApiDocument,
+  value: unknown,
+  visited = new Set<string>(),
+): unknown {
+  if (!isRecord(value) || typeof value.$ref !== 'string') return value;
+  if (visited.has(value.$ref)) return value;
+  const nextVisited = new Set(visited);
+  nextVisited.add(value.$ref);
+  const target = resolveSchemaNode(document, resolveLocalRef(document, value.$ref), nextVisited);
+  if (isOas30(document)) return target;
+  const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$ref'));
+  return Object.keys(siblings).length === 0 ? target : conjoinSchemaSiblings(target, siblings);
+}
+
+const pathItemConflicts = new WeakMap<OpenApiDocument, WeakMap<object, string[]>>();
+
+/** Path Item $ref is its own OpenAPI field, not a Reference Object. Preserve
+ * non-overlapping sibling operations; overlapping differing fields have
+ * undefined semantics and are recorded for the comparison/coverage layer.
+ */
+export function resolvePathItemNode(document: OpenApiDocument, value: unknown, visited = new Set<string>()): unknown {
+  if (!isRecord(value) || typeof value.$ref !== 'string') return value;
+  let conflicts = pathItemConflicts.get(document);
+  if (!conflicts) { conflicts = new WeakMap(); pathItemConflicts.set(document, conflicts); }
+  if (visited.has(value.$ref)) { conflicts.set(value, ['$ref-cycle']); return value; }
+  if (visited.size >= 128) throw new ContractGuardError('INVALID_REFERENCE', 'Path Item reference chain exceeds the supported depth of 128.');
+  const nextVisited = new Set(visited); nextVisited.add(value.$ref);
+  const target = resolveLocalRef(document, value.$ref);
+  const resolved = resolvePathItemNode(document, target, nextVisited);
+  if (!isRecord(resolved)) { conflicts.set(value, ['$ref-target']); return resolved; }
+  const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$ref'));
+  const inherited = typeof target === 'object' && target !== null ? conflicts.get(target) ?? [] : [];
+  const overlap = Object.keys(siblings).filter((key) => Object.prototype.hasOwnProperty.call(resolved, key)
+    && JSON.stringify(resolved[key]) !== JSON.stringify(siblings[key]));
+  conflicts.set(value, [...new Set([...inherited, ...overlap])]);
+  return { ...resolved, ...siblings };
+}
+
+export function pathItemReferenceConflicts(document: OpenApiDocument, value: unknown): string[] {
+  if (!isRecord(value) || typeof value.$ref !== 'string') return [];
+  resolvePathItemNode(document, value);
+  return pathItemConflicts.get(document)?.get(value) ?? [];
 }

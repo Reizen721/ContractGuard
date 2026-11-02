@@ -10,7 +10,7 @@ $script:InvocationDirectory = (Get-Location).Path
 $script:NodeExecutable = $null
 
 function Write-LauncherUsage {
-  Write-Host 'ContractGuard V1.1.0 Windows launcher'
+  Write-Host 'ContractGuard V2.0.0 Windows launcher'
   Write-Host ''
   Write-Host 'Usage:'
   Write-Host '  start-contractguard.bat'
@@ -21,14 +21,16 @@ function Write-LauncherUsage {
   Write-Host '  start-contractguard.bat --build [llm-config.json]'
   Write-Host '  start-contractguard.bat --install [llm-config.json]'
   Write-Host '  start-contractguard.bat --no-ai'
+  Write-Host '  start-contractguard.bat --projects <trusted-projects.json> --no-ai'
   Write-Host '  start-contractguard.bat --help'
   Write-Host ''
   Write-Host 'Options:'
   Write-Host '  --check       Validate runtime, builds and JSON without prompting or starting.'
   Write-Host '  --build       Rebuild all workspaces before starting.'
-  Write-Host '  --install     Install the locked dependencies, rebuild, then start.'
+  Write-Host '  --install     Install locked dependencies and pinned oasdiff, rebuild, then start.'
   Write-Host '  --config      Select a V1.1 multi-LLM JSON file.'
   Write-Host '  --policy      Select a V1.1 rule-policy JSON file.'
+  Write-Host '  --projects    Select a trusted local project registry for existing tests.'
   Write-Host '  --host        Override HOST for this process.'
   Write-Host '  --port        Override PORT for this process.'
   Write-Host '  --no-ai       Start only the deterministic compatibility analyzer.'
@@ -50,6 +52,7 @@ function New-LauncherOptions {
     Help = $false
     Config = $null
     Policy = $null
+    Projects = $null
     BindHost = $null
     Port = $null
   }
@@ -124,6 +127,12 @@ function Parse-LauncherArguments {
           throw '--host was provided more than once.'
         }
         $options.BindHost = Read-RequiredArgument -Values $Values -Index $index -OptionName '--host'
+        $index += 1
+        continue
+      }
+      '^--projects$' {
+        if ($null -ne $options.Projects) { throw '--projects was provided more than once.' }
+        $options.Projects = Read-RequiredArgument -Values $Values -Index $index -OptionName '--projects'
         $index += 1
         continue
       }
@@ -256,13 +265,13 @@ function Invoke-Pnpm {
 
   $pnpmCommand = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
   if ($null -ne $pnpmCommand) {
-    & $pnpmCommand.Source @CommandArguments
+    & $pnpmCommand.Source @CommandArguments | Out-Host
   } else {
     $corepackCommand = Get-Command corepack.cmd -ErrorAction SilentlyContinue
     if ($null -eq $corepackCommand) {
       throw 'pnpm was not found. Install pnpm or enable Corepack, then open a new terminal.'
     }
-    & $corepackCommand.Source pnpm @CommandArguments
+    & $corepackCommand.Source pnpm @CommandArguments | Out-Host
   }
   if ($LASTEXITCODE -ne 0) {
     throw "pnpm failed with exit code $LASTEXITCODE."
@@ -299,8 +308,20 @@ function Test-InputNewerThanOutput {
 function Assert-BuildOutputs {
   $targets = @(
     [PSCustomObject]@{
+      Output = 'packages\oasdiff\dist\index.js'
+      Inputs = @('packages\oasdiff\src', 'packages\oasdiff\package.json', 'config\oasdiff-lock.json', 'package.json', 'pnpm-lock.yaml')
+    },
+    [PSCustomObject]@{
       Output = 'packages\core\dist\index.js'
       Inputs = @('packages\core\src', 'packages\core\package.json', 'packages\core\tsconfig.json', 'package.json', 'pnpm-lock.yaml')
+    },
+    [PSCustomObject]@{
+      Output = 'packages\caller\dist\index.js'
+      Inputs = @('packages\caller\src', 'packages\caller\package.json', 'packages\caller\tsconfig.json', 'package.json', 'pnpm-lock.yaml')
+    },
+    [PSCustomObject]@{
+      Output = 'packages\project\dist\index.js'
+      Inputs = @('packages\project\src', 'packages\project\package.json', 'packages\project\tsconfig.json', 'package.json', 'pnpm-lock.yaml')
     },
     [PSCustomObject]@{
       Output = 'apps\api\dist\index.js'
@@ -334,7 +355,7 @@ function Assert-BuildOutputs {
   if ($staleOutputs.Count -gt 0) {
     throw ('Build output is missing or stale: ' + ($staleOutputs -join ', ') + '. Run start-contractguard.bat --build.')
   }
-  Write-Host '[ContractGuard] Core, API and Web build outputs are present and current.'
+  Write-Host '[ContractGuard] Core, oasdiff, Caller, API and Web build outputs are present and current.'
 }
 
 function Resolve-LlmConfigurationPath {
@@ -664,6 +685,9 @@ function Invoke-ContractGuardLauncher {
     if ($options.Install) {
       Write-Host '[ContractGuard] Installing locked dependencies...'
       Invoke-Pnpm -CommandArguments @('install', '--frozen-lockfile')
+      Write-Host '[ContractGuard] Installing the pinned oasdiff engine...'
+      & $script:NodeExecutable 'scripts/install-oasdiff.mjs' | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw 'The pinned oasdiff engine could not be installed.' }
     }
     if (-not (Test-Path -LiteralPath 'node_modules' -PathType Container)) {
       throw 'Dependencies are not installed. Run start-contractguard.bat --install.'
@@ -673,6 +697,17 @@ function Invoke-ContractGuardLauncher {
       Invoke-Pnpm -CommandArguments @('build')
     }
     Assert-BuildOutputs
+    $projectConfig = $options.Projects
+    if ($null -eq $projectConfig) { $projectConfig = Get-NonEmptyEnvironmentValue -Name 'CONTRACTGUARD_PROJECT_CONFIG' }
+    if ($null -ne $projectConfig) {
+      $projectConfig = Resolve-LauncherPath -PathValue $projectConfig
+      if (-not (Test-Path -LiteralPath $projectConfig -PathType Leaf)) { throw 'The selected project registry does not exist.' }
+      Set-ProcessEnvironmentValue -Name 'CONTRACTGUARD_PROJECT_CONFIG' -Value $projectConfig
+      & $script:NodeExecutable 'scripts/project-status.mjs' | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw 'Project registry validation failed.' }
+    }
+    & $script:NodeExecutable 'scripts/oasdiff-status.mjs' | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Agent engine status could not be checked.' }
 
     if ($null -ne $options.BindHost) {
       Set-ProcessEnvironmentValue -Name 'HOST' -Value $options.BindHost
@@ -723,7 +758,7 @@ function Invoke-ContractGuardLauncher {
     Write-Host "[ContractGuard] Starting server. Open $browserUrl after it is ready."
     Write-Host '[ContractGuard] Press Ctrl+C to stop.'
     Write-Host ''
-    & $script:NodeExecutable 'apps/api/dist/index.js'
+    & $script:NodeExecutable 'apps/api/dist/index.js' | Out-Host
     $serverExitCode = $LASTEXITCODE
     if ($serverExitCode -ne 0) {
       Write-Host ''

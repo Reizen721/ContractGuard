@@ -1,0 +1,16 @@
+get:
+  operationId: getPartner
+  summary: Read the registered partner configuration
+  parameters:
+    - name: partnerId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Partner configuration
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/partner.yaml

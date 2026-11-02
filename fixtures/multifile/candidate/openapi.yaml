@@ -1,0 +1,22 @@
+openapi: 3.1.0
+info:
+  title: Local Orders API
+  version: 1.1.0
+paths:
+  /orders:
+    get:
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/order.yaml'
+webhooks:
+  orderCreated:
+    post:
+      responses:
+        '200':
+          description: Acknowledged

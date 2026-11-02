@@ -1,0 +1,5 @@
+{
+  "type": "number",
+  "minimum": -40,
+  "maximum": 125
+}

@@ -1,0 +1,26 @@
+openapi: 3.1.0
+info:
+  title: Retail checkout and customer API
+  version: '2026.10'
+  description: Storefront order submission, order history and customer profile lookup.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service health
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+  /orders:
+    $ref: ./paths/orders.yaml
+  /customers/{customerId}:
+    $ref: ./paths/customer.yaml

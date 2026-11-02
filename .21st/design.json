@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "source": "repository-and-authorized-design-brief",
+  "framework": "vue",
+  "uiLibrary": "native-controls",
+  "direction": "compact-release-review-workbench",
+  "tokens": {
+    "background": "#f5f5f1",
+    "surface": "#ffffff",
+    "text": "#242b2a",
+    "muted": "#626d66",
+    "line": "#d9ddd5",
+    "accent": "#305e50",
+    "danger": "#a32e32",
+    "warning": "#865e12",
+    "radius": "3px",
+    "fontFamily": "Segoe UI, Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif"
+  },
+  "grounding": [
+    { "id": 27611, "name": "Project Management Table", "reference": "https://21st.dev/r/shadcnspace/table-01", "access": "free-metadata-only" },
+    { "id": 2617, "name": "projects-table", "reference": "https://21st.dev/r/ln-dev7/projects-table", "access": "free-metadata-only" }
+  ],
+  "cliAvailable": false,
+  "generationEnabled": false,
+  "notes": "Manually recorded context; not produced by 21st CLI. Reuse Vue primitives and no paid retrieval."
+}

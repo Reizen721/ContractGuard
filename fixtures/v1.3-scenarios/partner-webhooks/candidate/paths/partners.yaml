@@ -1,0 +1,31 @@
+post:
+  operationId: registerPartner
+  summary: Register a partner and its delivery callback
+  parameters:
+    - name: dryRun
+      in: query
+      required: false
+      schema:
+        type: boolean
+    - name: region
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: [apac, eu]
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/register-partner.yaml
+  responses:
+    '201':
+      description: Registered partner
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/partner.yaml
+  callbacks:
+    deliveryNotice:
+      $ref: ../notifications/callback.yaml

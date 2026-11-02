@@ -1,0 +1,10 @@
+{
+  "description": "Service health",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/health.json"
+      }
+    }
+  }
+}

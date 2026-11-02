@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [sku, quantity, unitPriceCents]
+properties:
+  sku:
+    type: string
+    minLength: 1
+  quantity:
+    type: integer
+    minimum: 1
+    maximum: 99
+  unitPriceCents:
+    type: integer
+    minimum: 0

@@ -1,0 +1,43 @@
+{
+  "post": {
+    "operationId": "inviteMember",
+    "security": [
+      {
+        "OAuth": [
+          "members:write",
+          "members:invite"
+        ]
+      }
+    ],
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "../schemas/invitation.json"
+          }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "description": "Invitation created",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "invitationId"
+              ],
+              "properties": {
+                "invitationId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

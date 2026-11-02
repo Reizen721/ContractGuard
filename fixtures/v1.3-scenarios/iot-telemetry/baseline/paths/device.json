@@ -1,0 +1,22 @@
+{
+  "get": {
+    "operationId": "getDeviceTree",
+    "parameters": [
+      {
+        "$ref": "../parameters/device-id.json"
+      }
+    ],
+    "responses": {
+      "200": {
+        "description": "Device tree",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "../schemas/device.json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

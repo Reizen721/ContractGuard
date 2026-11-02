@@ -1,0 +1,22 @@
+paths:
+  /orders:
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  total:
+                    type: number
+                  id:
+                    type: string
+                required:
+                  - id
+                  - total
+                type: object
+          description: OK
+info:
+  version: '1'
+  title: ContractGuard acceptance 01
+openapi: 3.1.0

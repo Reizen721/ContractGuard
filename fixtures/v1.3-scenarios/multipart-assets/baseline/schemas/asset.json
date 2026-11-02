@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": [
+    "assetId",
+    "downloadUrl",
+    "state"
+  ],
+  "properties": {
+    "assetId": {
+      "type": "string"
+    },
+    "downloadUrl": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "ready"
+      ]
+    }
+  }
+}

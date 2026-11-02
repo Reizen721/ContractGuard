@@ -1,0 +1,10 @@
+{
+  "description": "Job state",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/job.json"
+      }
+    }
+  }
+}

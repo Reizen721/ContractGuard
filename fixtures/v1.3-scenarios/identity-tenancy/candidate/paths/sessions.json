@@ -1,0 +1,20 @@
+{
+  "delete": {
+    "operationId": "revokeSession",
+    "parameters": [
+      {
+        "$ref": "../parameters/session-id.json"
+      }
+    ],
+    "security": [
+      {
+        "TenantKey": []
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Session revoked"
+      }
+    }
+  }
+}

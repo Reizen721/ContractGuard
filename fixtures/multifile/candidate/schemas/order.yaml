@@ -1,0 +1,8 @@
+type: object
+additionalProperties: false
+required: [id]
+properties:
+  id:
+    type: string
+  note:
+    type: [string, 'null']

@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "required": [
+    "members"
+  ],
+  "properties": {
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "editor",
+              "owner"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -8,13 +8,14 @@ ContractGuard 把“可复现的兼容结论”放在界面表现之前。任何
 - Web、API、CLI 共用类型和规则，不复制判断逻辑；
 - 每个新增规则必须有正例、反例和边界测试；
 - 无法可靠判断的语义要暴露限制，不能静默当作兼容；
-- AI 只能解释已有 finding，不得参与规则等级、计分、`compatible` 或 CLI/CI 退出码；
+- AI 报告解释器解释已有 finding；Agent 规划模型可选择白名单检查工具，但不得改写确定性规则、计分和门禁结论；
 - 文档中的命令、响应示例和规则表应跟随代码一起修改。
 
 ## 2. 初始化工作区
 
 ```bash
 pnpm install
+pnpm engine:install
 pnpm build
 pnpm test
 ```
@@ -32,6 +33,14 @@ pnpm typecheck  # 运行 TypeScript 类型检查（若脚本可用）
 
 ## 3. 代码边界
 
+当前发布为 **2.0.0**，自有包、原生引擎与插件版本统一；官方 oasdiff 独立固定为 1.35.0。`packages/mcp` 依赖官方 TypeScript MCP SDK，提供 stdio 服务；生成配置直接调用 `node`，避免包管理器日志污染协议 stdout。`pnpm plugin:prepare` 生成本机配置与可移动插件，`pnpm test:plugin` 验证打包和搬迁。19 个工具共用现有 HTTP 服务、项目注册表和历史，不重复实现规则或持有模型密钥。当前安装方法见 [2.0 使用指南](v2.0-user-guide.md)。
+
+`packages/caller` 负责有界 TypeScript AST 分析、响应重放和显式字段迁移；`packages/project` 负责可信项目注册、输入快照和 Node/Vitest 固定测试执行。后者会执行可信项目代码，不是操作系统沙箱；不得把任意模型命令或路径透传给测试进程。内置 Agent 组合这些证据，补丁通过不清除原门禁。
+
+`pnpm check` 包含构建、类型检查、单元测试、插件打包与跨入口回归；`pnpm versions:check` 校验发布版本一致，`pnpm regression:v20` 验证旧历史和显式 1.5.0 回归包升级兼容。自动化检查不需要真实模型密钥。`regression:v16` 等脚本名称保留功能加入时版本，仍使用当前构建验证，不代表运行旧版程序。
+
+`packages/oasdiff` 负责固定官方引擎与受限子进程执行，`apps/api/src/agent` 负责任务队列、模型规划、证据校验和保存恢复。单次 compare 与 Agent 是不同入口；前者使用自有规则，后者组合上游检查。运行 `pnpm parity:oasdiff` 和 `pnpm regression:v15` 验证委托与真实任务流程，两项都需要固定引擎已安装。完整 `pnpm check` 已包含它们。
+
 ### `packages/core`
 
 核心包负责：
@@ -42,11 +51,19 @@ pnpm typecheck  # 运行 TypeScript 类型检查（若脚本可用）
 4. 比较 baseline 与 candidate；
 5. 验证并应用规则策略；
 6. 生成 `Change[]`、摘要、得分和输入/策略指纹；
-7. 暴露版本化规则目录。
+7. 暴露版本化规则目录；
+8. 通过 `prepareContract` 处理显式多文件输入、依赖指纹与来源映射，并生成独立的 coverage；
+9. 通过 `analyzeRelease` 按需组合调用方样例检查、迁移任务和独立门禁；创建与校验显式回归包。
 
 核心函数应尽量是纯函数。时间戳等不可重复值在边界层注入或单独测试。不得在解析过程中抓取远程 URL。
 
+多文件解析只读取调用者提供的 `files`，不访问磁盘。CLI 的 `bundle-loader.ts` 是文件系统边界：读取入口及实际引用依赖，检查允许根目录和符号链接后的物理路径；API 和 Web 只传内容。不得将远程引用或路径逃逸转换为自动下载/补文件。方言、Schema 引用和 Path Item 引用分别处理；不能用普通对象合并代替 3.1 Schema 约束合取。
+
+输入预算为每侧 50 文件、5 MiB UTF-8 内容；另有结构深度、引用数和展开预算，见 `bundle.ts` 常量及边界测试。YAML alias 有界打散，示例数据中的 `$ref` 不按契约引用解释。新增无法证明的语义时优先增加明确 coverage，而非继续输出精确兼容结论。coverage 不受规则关闭影响，缺失旧字段表示未知。完整行为见 [V1.3 指南](./v1.3-upgrade.md)。
+
 ### `apps/api`
+
+V1.4 的证据入口是 `consumerEvidence`，由核心 `validateConsumerEvidence` 校验；不能通过未知顶层字段悄悄忽略拼写错误。请求整体上限为 `2 * maxSpecBytes + 1 MiB + 64 KiB`，证据另受 1 MiB／50 调用方／200 交互等预算限制。历史只保存 `consumerImpact` 元数据，不保存样例 body 或 expectation。AI prompt v4 只提取有限状态和问题代码。
 
 API 负责输入上限、状态码、历史 repository、导出内容类型和可选的 AI provider 边界。路由层不应包含类似“新增必填字段就是 breaking”的逻辑。错误应归一为稳定 JSON 结构，服务端日志与公开消息分离。
 
@@ -70,6 +87,14 @@ API 负责输入上限、状态码、历史 repository、导出内容类型和�
 ### `apps/cli`
 
 CLI 负责参数解析、文件 I/O、格式渲染与退出码。其分析结果应与 REST API 对相同输入得到的核心结果一致（除时间戳和记录 ID 等边界字段）。
+
+V1.4 的 `--consumer-evidence` 读取本地 JSON，`--fail-on-consumer regression|review|never` 是独立门禁。`--write-regression-pack` 以 `wx` 创建新文件，不覆盖已有包；`verify-pack` 校验格式、内容校验和与精确引擎版本后重新分析。包中包含原始样例，因此不得自动把运行时包作为公共测试 fixture 或上传产物。
+
+### 调用方校验的开发约束
+
+新增样例校验必须同时断言有效、已知失败与无法确定三种状态。基线非法时不能产生“升级回归”；未知约束不能偷偷降级为通过。检查应遵守 request／response 方向、引用方言和只读／只写必填语义，并防止未支持的 `patternProperties` 或 `prefixItems` 改变其他约束作用范围后造成误判。始终限制深度、工作量、问题数量和报告内容；不在诊断文本中嵌入原始样例值。
+
+静态契约分析与有限样例校验针对不同问题，不共享“通过”的外推含义。关联的 change ID 是操作级上下文，不是自动证明的失败原因。回归包的 checksum 只绑定内容；修改字段后重算 checksum 不能使无效 manifest 通过校验。完整格式和复现命令见 [V1.4 指南](./v1.4-consumer-impact.md)。
 
 ## 4. 增加一条规则
 
@@ -120,6 +145,8 @@ it('marks an optional request parameter becoming required as breaking', () => {
 
 ### 单元测试
 
+- 三态样例校验、非法基线、缺失候选证据、组合／引用边界、资源预算和无原始值的诊断；
+- 回归包内容、引擎版本和规范化身份，避免校验后改变被校验内容；
 - 解析 YAML 与 JSON；
 - 版本与基础结构校验；
 - JSON Pointer 转义和本地 `$ref`；
@@ -145,16 +172,36 @@ it('marks an optional request parameter becoming required as breaking', () => {
 
 ### Web 测试
 
+V1.2 的 `pnpm --filter @contractguard/web test` 同时运行数据处理测试、组件测试类型检查与 Vitest/jsdom 中挂载真实 Vue 组件的交互回归；不是只检查纯工具函数。网络接口使用 mock，不调用真实模型。
+
 - 空输入时按钮/错误状态；
 - 示例加载和分析请求；
 - 四种 severity 筛选、关键字搜索和空结果；
 - API 错误可读且可恢复；
 - 报告下载与历史打开；
 - 窄屏下输入区和结果列表仍可用。
+- 分析期间修改、清空或切换示例时取消/丢弃旧请求；
+- 历史报告与编辑器状态隔离，输入变更提示和来源指纹正确；
+- AI 关闭仍能读取已保存解读，恢复、导出和 force 参数正确；
+- AI 档案/关注点/分析切换与延迟历史响应不覆盖较新的解读。
 
 ### 端到端一致性
 
+V1.4 构建后执行 `pnpm regression:v14`，已纳入 `pnpm check`。比较核心、真实 HTTP 和 CLI 的调用方检查、报告导出、保存／恢复、独立门禁与回归包复验结果；样例仍是合成输入，不是对生产调用方或竞争工具准确率的测量。
+
 使用同一对 fixture 分别调用核心、API 和 CLI，比较规则 ID、位置、等级和摘要。忽略记录 ID、生成时间等非语义字段。
+
+`pnpm regression` 在构建后执行 `scripts/regression-test.mjs`：对八个有标签的 V1.2 原子案例实际调用核心、REST API 与 CLI，比较规则、等级、证据、输入/策略指纹及摘要，并断言 CLI 默认门禁退出码。案例包括 3.0/3.1 排他边界、组合重叠、序列化默认值、响应头删除和开放请求对象新增受约束属性；这不是基于真实 API 样本测得的准确率。
+
+`pnpm regression:v13` 执行 `scripts/v13-regression.mjs`，核对多文件三入口的 findings、coverage、来源和指纹一致，文件顺序不影响包指纹，以及 `--fail-on-incomplete` 与严重等级门禁独立。也验证内联/跨文件引用两种 3.0 nullable→3.1 null 联合类型的等价迁移。两组回归都属于 `pnpm check`。
+
+`pnpm acceptance:v13` 在构建后按编号执行 20 个固定标签的合成场景，逐例核对 Core、API 和 CLI，再检查历史、Markdown/HTML 导出及服务重启恢复；它也属于 `pnpm check`。16 个应生成分析的案例与 4 个应拒绝的案例都按预先标签断言，不把预期拒绝计为测试失败。可运行 `node scripts/acceptance-v13.mjs --output-dir ../ContractGuard-v1.3-20-case-results` 保存逐例证据。场景、独立门禁与手动 CLI 复核见 [20 个验收案例](./v1.3-acceptance-cases.md)。这组测试关闭 AI，不替代真实浏览器验收或真实数据准确率评估。
+
+`pnpm scenarios:v13` 在构建后运行 8 个复合业务场景，覆盖结算、商品分页、批处理、租户身份、多媒体上传、IoT、兼容演进与伙伴通知。它与 20 个固定案例共用执行器，额外核对精确逻辑位置、独立标签摘要、未变控制、原文件来源、逐文件 SHA-256 和文件清单逆序稳定性。运行 `node scripts/scenarios-v13.mjs --output-dir ../ContractGuard-v1.3-complex-results` 可保留证据；业务反例与 complete/partial 边界见 [复杂场景说明](./v1.3-complex-scenarios.md)。这些是关闭 AI 的合成契约测试，实际执行结果另记入验证记录。
+
+V1.3 单元/集成与组件用例还覆盖文件预算、路径逃逸、缺失引用、递归引用、YAML alias、方言边界、Path Item 相邻字段、未知范围、旧历史、异步导入状态以及导出转义。符号链接测试在无创建权限的 Windows 环境可能跳过，应如实记录。真实目录选择器与浏览器行为仍需单独 computer-use 验收，不能以 jsdom 替代。
+
+AI 持久化回归覆盖跨重启恢复、配置/输入/策略/引擎身份失效、失败不缓存、仅允许已发送 ID、显式 force、订阅者取消、删除与写入并发以及导出转义。所有 mock key 都是测试占位值，不应换成真实凭据。
 
 AI 测试不能对自然语言逐字断言，也不应在默认测试套件中调用真实云端模型。应固定 fake provider 返回，验证档案选择、能力参数、请求裁剪、响应 schema、错误降级和“不会改变确定性结果”的架构不变量。真实云端 smoke test 仅在人工触发、已配置 secret 且明确接受费用时运行。
 

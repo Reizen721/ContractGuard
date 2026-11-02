@@ -1,0 +1,17 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Caller migration example", "version": "1.0.0" },
+  "paths": {
+    "/orders/current": { "get": { "operationId": "getCurrentOrder", "responses": {
+      "200": { "description": "Current order", "content": { "application/json": { "schema": {
+        "type": "object", "required": ["id", "customerName"],
+        "properties": { "id": { "type": "string" }, "customerName": { "type": "string" } }
+      } } } }
+    } } },
+    "/profile": { "get": { "operationId": "getProfile", "responses": {
+      "200": { "description": "Profile", "content": { "application/json": { "schema": {
+        "type": "object", "required": ["email"], "properties": { "email": { "type": "string" } }
+      } } } }
+    } } }
+  }
+}

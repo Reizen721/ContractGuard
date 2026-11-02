@@ -9,9 +9,23 @@ export interface AiReviewRequest {
   focus?: string;
   /** Server-configured profile identifier. Clients can never supply a URL, model, or credential. */
   providerId?: string;
+  /** Explicitly generate a fresh review instead of reusing a saved result. */
+  force?: boolean;
+}
+
+export interface AiReviewCoverage {
+  totalFindings: number;
+  includedFindings: number;
+  omittedFindings: number;
+  includedChangeIds: string[];
 }
 
 export interface AiReview {
+  /** Present on persisted reviews created by V1.2 and later. */
+  id?: string;
+  language?: AiReviewLanguage;
+  focus?: string;
+  coverage?: AiReviewCoverage;
   schemaVersion: '1.0';
   analysisId: string;
   provider: string;
@@ -19,7 +33,7 @@ export interface AiReview {
   providerLabel: string;
   model: string;
   generatedAt: string;
-  promptVersion: 'ai-explainer-v1';
+  promptVersion: 'ai-explainer-v1' | 'ai-explainer-v2' | 'ai-explainer-v3' | 'ai-explainer-v4';
   overview: {
     headline: string;
     executiveSummary: string;
@@ -59,7 +73,7 @@ export interface AiServiceStatus {
   /** Backwards-compatible alias for the active profile's provider kind. */
   provider: string;
   model: string;
-  promptVersion: 'ai-explainer-v1';
+  promptVersion: 'ai-explainer-v1' | 'ai-explainer-v2' | 'ai-explainer-v3' | 'ai-explainer-v4';
   activeProfile: string;
   activeProviderId: string;
   defaultProviderId: string;
@@ -82,6 +96,8 @@ export interface AiProviderStatus {
 
 export interface AiReviewService {
   status(): AiServiceStatus;
+  /** Validates current provider permissions and returns a secret-free configuration identity. */
+  cacheIdentity?(request: AiReviewRequest): string;
   review(analysis: StoredAnalysis, request: AiReviewRequest, options?: AiReviewCallOptions): Promise<AiReview>;
 }
 

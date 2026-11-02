@@ -1,0 +1,16 @@
+get:
+  operationId: getDelivery
+  summary: Read an outbound delivery receipt
+  parameters:
+    - name: deliveryId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Delivery status and destination
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/delivery.yaml

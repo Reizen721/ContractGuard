@@ -1,0 +1,28 @@
+oneOf:
+  - type: object
+    additionalProperties: false
+    required: [kind, address]
+    properties:
+      kind:
+        type: string
+        enum: [email]
+      address:
+        type: string
+  - type: object
+    additionalProperties: false
+    required: [kind, url]
+    properties:
+      kind:
+        type: string
+        enum: [http]
+      url:
+        type: string
+  - type: object
+    additionalProperties: false
+    required: [kind, queueName]
+    properties:
+      kind:
+        type: string
+        enum: [queue]
+      queueName:
+        type: string

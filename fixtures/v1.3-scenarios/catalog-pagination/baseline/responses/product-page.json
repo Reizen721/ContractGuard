@@ -1,0 +1,17 @@
+{
+  "description": "Product page",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/product-page.json"
+      }
+    }
+  },
+  "headers": {
+    "X-Next-Cursor": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  }
+}

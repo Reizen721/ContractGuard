@@ -1,0 +1,29 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContractGuard complex iot-telemetry",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/devices/{deviceId}": {
+      "$ref": "./paths/device.json"
+    },
+    "/devices/{deviceId}/telemetry": {
+      "$ref": "./paths/telemetry.json"
+    },
+    "/devices/{deviceId}/configuration": {
+      "$ref": "./paths/configuration.json"
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { AnalysisRecord, ChangeRecord, SeverityFilter } from '../types'
-import { filterChanges, prettyValue } from '../utils'
+import { filterChanges, formatSourceLocation, prettyValue } from '../utils'
 
 const props = defineProps<{ analysis: AnalysisRecord }>()
 const severity = ref<SeverityFilter>('all')
@@ -49,7 +49,7 @@ function clearFilters(): void {
       <label class="search-field">
         <span aria-hidden="true">⌕</span>
         <span class="sr-only">搜索变更</span>
-        <input v-model="query" type="search" placeholder="搜索路径、规则或描述" />
+        <input v-model="query" type="search" placeholder="搜索路径、文件、规则或描述" />
       </label>
     </div>
 
@@ -96,6 +96,10 @@ function clearFilters(): void {
           </button>
 
           <div v-if="expanded === change.id" :id="`change-details-${index}`" class="change-card__details" role="region" :aria-label="`${change.message} 的变更详情`">
+            <dl v-if="change.sourceLocations?.old || change.sourceLocations?.new" class="finding-origins">
+              <template v-if="change.sourceLocations.old"><dt>基线原文件</dt><dd><code>{{ formatSourceLocation(change.sourceLocations.old) }}</code></dd></template>
+              <template v-if="change.sourceLocations.new"><dt>候选原文件</dt><dd><code>{{ formatSourceLocation(change.sourceLocations.new) }}</code></dd></template>
+            </dl>
             <div class="diff-grid">
               <div>
                 <span>变更前</span>

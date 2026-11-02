@@ -1,0 +1,21 @@
+{
+  "name": "contractguard",
+  "version": "2.0.0",
+  "description": "Local OpenAPI compatibility analysis, consumer-aware reviews, and shared report history.",
+  "author": { "name": "Reizen721", "url": "https://github.com/Reizen721" },
+  "homepage": "https://github.com/Reizen721/ContractGuard",
+  "repository": "https://github.com/Reizen721/ContractGuard",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "ContractGuard",
+    "shortDescription": "API compatibility analysis, reviews, and history",
+    "longDescription": "Analyze OpenAPI contracts and submitted consumer evidence through your running local ContractGuard service. Retrieve shared analysis history and evidence-linked review reports.",
+    "developerName": "Reizen721",
+    "websiteURL": "https://github.com/Reizen721/ContractGuard",
+    "category": "Developer Tools",
+    "capabilities": ["Local", "MCP"]
+  }
+}

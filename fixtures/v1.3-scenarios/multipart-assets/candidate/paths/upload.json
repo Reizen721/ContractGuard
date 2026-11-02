@@ -1,0 +1,40 @@
+{
+  "post": {
+    "operationId": "uploadAsset",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "multipart/form-data": {
+          "schema": {
+            "$ref": "../schemas/upload-form.json"
+          },
+          "encoding": {
+            "file": {
+              "contentType": "image/png"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "201": {
+        "description": "Asset created",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "assetId"
+              ],
+              "properties": {
+                "assetId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

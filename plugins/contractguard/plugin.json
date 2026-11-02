@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "contractguard",
+  "version": "2.0.0",
+  "description": "Review OpenAPI changes and TypeScript caller evidence, verify proposed field migrations in a bounded interpreter, and retrieve saved reports through local MCP.",
+  "author": { "name": "Reizen721", "url": "https://github.com/Reizen721" },
+  "homepage": "https://github.com/Reizen721/ContractGuard",
+  "repository": "https://github.com/Reizen721/ContractGuard",
+  "license": "MIT",
+  "keywords": ["openapi", "api-compatibility", "contract-testing", "mcp"],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "ContractGuard",
+        "shortDescription": "API compatibility analysis, reviews, and history",
+        "longDescription": "Use the running local ContractGuard service to compare OpenAPI contracts, check submitted consumer evidence, run bounded reviews, and retrieve saved reports. Shares history and configured AI providers with the web application.",
+        "developerName": "Reizen721",
+        "websiteURL": "https://github.com/Reizen721/ContractGuard",
+        "category": "Developer Tools",
+        "capabilities": ["Local", "MCP"]
+      }
+    }
+  }
+}

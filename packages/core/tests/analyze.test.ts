@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { analyzeCompatibility, ContractGuardError, ruleCatalog } from "../src/index.js";
+import { analyzeCompatibility, ContractGuardError, ENGINE_VERSION, ruleCatalog } from "../src/index.js";
 
 type AnyDocument = Record<string, any>;
 
@@ -48,7 +48,7 @@ describe("analyzeCompatibility", () => {
     const spec = document(operation());
     const result = analyzeCompatibility(spec, structuredClone(spec), { generatedAt: fixedTime });
     expect(result).toMatchObject({
-      engineVersion: "1.1.0",
+      engineVersion: ENGINE_VERSION,
       generatedAt: fixedTime,
       score: 100,
       compatible: true,

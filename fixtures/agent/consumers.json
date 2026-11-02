@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "consumers": [
+    {
+      "id": "retail-checkout", "name": "Retail checkout", "owner": "Checkout team", "criticality": "critical",
+      "interactions": [
+        { "id": "single-item-order", "method": "POST", "path": "/orders", "request": { "mediaType": "application/json", "body": { "sku": "DEMO-BOOK", "quantity": 1 } } },
+        { "id": "bulk-order", "method": "POST", "path": "/orders", "request": { "mediaType": "application/json", "body": { "sku": "DEMO-BOOK", "quantity": 4 } } }
+      ]
+    }
+  ]
+}

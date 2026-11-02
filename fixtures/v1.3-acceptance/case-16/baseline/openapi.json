@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContractGuard V1.3 acceptance 16",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/orders": {
+      "$ref": "./paths/orders.json",
+      "get": {
+        "responses": {
+          "202": {
+            "description": "Queued"
+          }
+        }
+      }
+    }
+  }
+}

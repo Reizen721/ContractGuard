@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+required: [partnerId, displayName, status, callbackUrl]
+properties:
+  partnerId:
+    type: string
+  displayName:
+    type: string
+  status:
+    type: string
+    enum: [active, paused]
+  callbackUrl:
+    type: string

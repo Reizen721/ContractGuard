@@ -1,0 +1,25 @@
+post:
+  operationId: registerPartner
+  summary: Register a partner and its delivery callback
+  parameters:
+    - name: dryRun
+      in: query
+      required: false
+      schema:
+        type: boolean
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/register-partner.yaml
+  responses:
+    '201':
+      description: Registered partner
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/partner.yaml
+  callbacks:
+    deliveryNotice:
+      $ref: ../notifications/callback.yaml

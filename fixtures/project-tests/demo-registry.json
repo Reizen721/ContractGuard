@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "projects": [
+    {
+      "id": "orders-migration",
+      "label": "订单字段迁移与已有测试",
+      "root": "orders-demo",
+      "include": [
+        "src",
+        "test",
+        "fixtures",
+        "contracts",
+        "package.json"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/candidate.json",
+      "caller": {
+        "files": [
+          "src/orders.ts"
+        ],
+        "fixtureScenarios": [
+          {
+            "id": "order-label",
+            "file": "src/orders.ts",
+            "exportName": "orderLabel",
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "bodyFile": "fixtures/baseline-response.json"
+            },
+            "candidateResponse": {
+              "status": 200,
+              "bodyFile": "fixtures/candidate-response.json"
+            },
+            "expectedFile": "fixtures/expected-label.json"
+          },
+          {
+            "id": "order-reference",
+            "file": "src/orders.ts",
+            "exportName": "orderReference",
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "bodyFile": "fixtures/baseline-response.json"
+            },
+            "candidateResponse": {
+              "status": 200,
+              "bodyFile": "fixtures/candidate-response.json"
+            },
+            "expectedFile": "fixtures/expected-reference.json"
+          }
+        ],
+        "fieldRenames": "fixtures/renames.json"
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "node-test",
+        "files": [
+          "test/orders.test.mjs"
+        ],
+        "timeoutMs": 10000,
+        "baseline": [
+          {
+            "target": "test/response.json",
+            "source": "fixtures/baseline-response.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/response.json",
+            "source": "fixtures/candidate-response.json"
+          }
+        ]
+      }
+    }
+  ]
+}

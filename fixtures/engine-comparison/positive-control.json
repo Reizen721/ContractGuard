@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "consumers": [
+    {
+      "id": "checkout",
+      "name": "Checkout application",
+      "owner": "Checkout team",
+      "criticality": "critical",
+      "interactions": [
+        {
+          "id": "receipt",
+          "method": "POST",
+          "path": "/orders",
+          "response": {
+            "status": "201",
+            "mediaType": "application/json",
+            "baselineBody": {
+              "id": "demo-old",
+              "receiptUrl": "/receipt/demo-old"
+            },
+            "candidateBody": {
+              "id": "demo-new",
+              "receiptUrl": "/receipt/demo-new"
+            },
+            "expectation": {
+              "type": "object",
+              "required": [
+                "id",
+                "receiptUrl"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "receiptUrl": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

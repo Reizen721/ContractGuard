@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [eventId, eventType, orderId, totalCents]
+properties:
+  eventId:
+    type: string
+  eventType:
+    type: string
+    enum: [order.created]
+  orderId:
+    type: string
+  totalCents:
+    type: integer
+    minimum: 0

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T04:59:55.655Z",
+  "title": "Design System: ContractGuard release review",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Review green"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Warm document ground"
+      },
+      "failure": {
+        "role": "semantic",
+        "displayName": "Blocking finding"
+      },
+      "review": {
+        "role": "semantic",
+        "displayName": "Review required"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Page title",
+        "purpose": "Compact titles above working content."
+      },
+      "body": {
+        "displayName": "Chinese UI text",
+        "purpose": "Local system fonts for controls and readable explanations."
+      },
+      "code": {
+        "displayName": "Contract notation",
+        "purpose": "Source documents, identifiers and fingerprints."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 12px 32px rgb(16 24 40 / 10%)",
+        "purpose": "Transient menus and notifications only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "Disable animation and transitions under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1180px"
+      },
+      {
+        "name": "tablet",
+        "value": "850px"
+      },
+      {
+        "name": "stacked",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary review action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Explicit action to start a deterministic analysis or selected Agent mode.",
+      "html": "<button class=\"ds-review-action\">开始审查</button>",
+      "css": ".ds-review-action{padding:7px 13px;min-height:36px;border:1px solid var(--blue,#305e50);border-radius:3px;background:var(--blue,#305e50);color:#fff;font:600 12px 'Segoe UI','Microsoft YaHei UI',sans-serif;cursor:pointer}.ds-review-action:hover{background:#254b3f}.ds-review-action:focus-visible{outline:2px solid var(--blue,#305e50);outline-offset:3px}.ds-review-action:disabled{opacity:.48;cursor:not-allowed}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Evidence-led release review",
+    "overview": "ContractGuard presents input contracts, executed checks, deterministic findings and migration advice in an ordered review workbench. The interface favors inspectable rows and compact working surfaces over dashboard decoration.",
+    "keyCharacteristics": [
+      "Horizontal task navigation",
+      "Two-sided contract inputs",
+      "Separate execution state and verdict",
+      "Visible evidence identifiers",
+      "Explicit local workflow versus model planning"
+    ],
+    "rules": [
+      {
+        "name": "Evidence before advice",
+        "body": "Generated recommendations never override deterministic findings or hide incomplete checks.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Use local Chinese system fonts",
+      "Keep keyboard focus visible",
+      "Stack columns on narrow screens",
+      "Explain when selected model features share data"
+    ],
+    "donts": [
+      "Do not add gradients or score rings",
+      "Do not use repeated rounded card grids",
+      "Do not present missing evidence as a pass"
+    ]
+  }
+}

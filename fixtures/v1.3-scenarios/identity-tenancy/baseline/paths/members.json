@@ -1,0 +1,35 @@
+{
+  "get": {
+    "operationId": "listMembers",
+    "parameters": [
+      {
+        "$ref": "../parameters/tenant-header.json"
+      },
+      {
+        "$ref": "../parameters/roles-query.json"
+      }
+    ],
+    "security": [
+      {
+        "OAuth": [
+          "members:read"
+        ]
+      },
+      {
+        "TenantKey": []
+      }
+    ],
+    "responses": {
+      "200": {
+        "description": "Members",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "../schemas/members.json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,250 @@
+[
+  {
+    "id": "case-11",
+    "title": "跨文件 nullable 方言迁移保持等价",
+    "scenario": "将外部请求 Schema 从 OpenAPI 3.0 的显式 string + nullable:true 迁移为 3.1 的 [string,null]，接受值集合保持一致。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "complete",
+      "findings": []
+    }
+  },
+  {
+    "id": "case-12",
+    "title": "3.1 nullable 不改变类型集合",
+    "scenario": "候选外部 Schema 在 string 上增加旧式 nullable:true；3.1 中该写法不赋予 null 类型，应提示忽略且不报告类型变化。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "partial",
+      "findings": [],
+      "coverageCodes": [
+        "OAS31_NULLABLE_IGNORED"
+      ]
+    }
+  },
+  {
+    "id": "case-13",
+    "title": "未知 Schema 方言保留待复核结论",
+    "scenario": "两侧引用相同的未知 $schema 方言，候选将 string 改为 number；无法按已知方言作精确包含关系判断，只能报告潜在风险。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "partial",
+      "findings": [
+        {
+          "ruleId": "SCHEMA_UNSUPPORTED_KEYWORD_CHANGED",
+          "severity": "potentially-breaking"
+        }
+      ],
+      "coverageCodes": [
+        "UNSUPPORTED_SCHEMA_DIALECT"
+      ]
+    }
+  },
+  {
+    "id": "case-14",
+    "title": "相同 webhook 输入明确提示未覆盖",
+    "scenario": "两侧 webhook 及其本地依赖完全相同，不应虚构差异；报告仍须说明当前引擎未分析 webhook 的发送方和接收方兼容性。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "webhooks/order-paid.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "webhooks/order-paid.json"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "partial",
+      "findings": [],
+      "coverageCodes": [
+        "WEBHOOKS_NOT_ANALYSED"
+      ]
+    }
+  },
+  {
+    "id": "case-15",
+    "title": "Path Item 非冲突相邻 POST 删除",
+    "scenario": "Path Item 引用本地文件中的 GET，同时在本体声明 POST；候选只删除相邻 POST，应检出操作删除，GET 继续保留。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/orders.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/orders.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "OPERATION_REMOVED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-16",
+    "title": "Path Item 同名 GET 冲突停止精确判断",
+    "scenario": "基线 Path Item 的引用目标与本体同时声明不同 GET，规范未定义该合并语义；候选移除冲突字段时应提示 partial，不把它断言为状态码或操作破坏。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/orders.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/orders.json"
+      ]
+    },
+    "expect": {
+      "compatible": true,
+      "coverage": "partial",
+      "findings": [],
+      "coverageCodes": [
+        "PATH_ITEM_REFERENCE_CONFLICT"
+      ]
+    }
+  },
+  {
+    "id": "case-17",
+    "title": "缺失本地依赖明确失败",
+    "scenario": "候选入口引用未随显式包提供的 schemas/missing.json，必须拒绝并指出缺失文件，不能产生成功兼容报告。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "errorCode": "INVALID_BUNDLE",
+      "missingFile": "schemas/missing.json"
+    }
+  },
+  {
+    "id": "case-18",
+    "title": "远程引用拒绝且不发起网络请求",
+    "scenario": "候选将请求 Schema 指向 HTTPS 地址；本地文件包只允许显式相对文件，不允许远程获取或把网络失败当作无差异。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "errorCode": "INVALID_BUNDLE"
+    }
+  },
+  {
+    "id": "case-19",
+    "title": "相对引用逃逸包根被拒绝",
+    "scenario": "候选入口用 ../outside.json 越过文件包根；即使路径形式是相对引用，也不得读取根外文件。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "errorCode": "INVALID_BUNDLE"
+    }
+  },
+  {
+    "id": "case-20",
+    "title": "命名 anchor 引用明确不支持",
+    "scenario": "候选引用 schemas/value.json#Value，依赖文件虽已提供但片段是命名 anchor；当前 JSON Pointer 解析器必须明确拒绝。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/value.json"
+      ]
+    },
+    "expect": {
+      "errorCode": "INVALID_REFERENCE"
+    }
+  }
+]

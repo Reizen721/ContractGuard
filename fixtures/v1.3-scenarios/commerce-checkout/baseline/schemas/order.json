@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "status",
+    "amountMinor"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid"
+      ]
+    },
+    "amountMinor": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

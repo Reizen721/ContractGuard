@@ -1,0 +1,10 @@
+{
+  "required": true,
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/checkout-request.json"
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   filterChanges,
+  formatSourceLocation,
   normalizeAiReview,
   normalizeAiStatus,
   normalizeAnalysis,
@@ -11,6 +12,43 @@ import {
 } from './utils.js'
 
 describe('response normalization', () => {
+  it('preserves V1.3 dialect, bundle manifests, coverage warnings and original finding locations', () => {
+    const hash = { algorithm: 'sha256', value: 'b'.repeat(64) }
+    const result = normalizeAnalysis({
+      source: { old: { dialect: 'openapi-3.0', bundle: { entry: 'openapi.yaml', files: [{ path: 'schemas/order.yaml', fingerprint: hash }] } } },
+      coverage: { status: 'partial', warnings: [{ side: 'new', code: 'WEBHOOK_UNSUPPORTED', location: 'webhooks', message: 'Review webhook', source: { file: 'openapi.yaml', pointer: '#/webhooks' } }], truncated: false },
+      changes: [{ sourceLocations: { old: { file: 'schemas/order.yaml', pointer: '/properties/id' }, new: { file: 'schemas/order.yaml', pointer: '#/properties/id' } } }],
+    })
+    assert.equal(result.source?.old.dialect, 'openapi-3.0')
+    assert.deepEqual(result.source?.old.bundle, { entry: 'openapi.yaml', files: [{ path: 'schemas/order.yaml', fingerprint: hash }] })
+    assert.equal(result.coverage?.warnings[0]?.source?.pointer, '#/webhooks')
+    assert.equal(result.changes[0]?.sourceLocations?.old?.file, 'schemas/order.yaml')
+    assert.equal(filterChanges(result.changes, 'all', 'schemas/order.yaml').length, 1)
+    assert.equal(result.changes[0]?.sourceLocations?.new?.pointer, '#/properties/id')
+    assert.equal(filterChanges(result.changes, 'all', 'schemas/order.yaml#/properties/id').length, 1)
+    assert.equal(formatSourceLocation({ file: 'schemas/order.yaml', pointer: '#/properties/id' }), 'schemas/order.yaml#/properties/id')
+    assert.equal(formatSourceLocation({ file: 'schemas/order.yaml', pointer: '/properties/id' }), 'schemas/order.yaml#/properties/id')
+    assert.equal(formatSourceLocation({ file: 'openapi.yaml', pointer: '#' }), 'openapi.yaml#')
+  })
+  it('never invents complete coverage for absent, malformed, truncated, or contradictory metadata', () => {
+    assert.equal(normalizeAnalysis({}).coverage, undefined)
+    assert.equal(normalizeAnalysis({ coverage: { status: 'complete' } }).coverage, undefined)
+    assert.equal(normalizeAnalysis({ coverage: { status: 'complete', warnings: [] } }).coverage, undefined)
+    assert.equal(normalizeAnalysis({ coverage: { status: 'complete', warnings: [{}], truncated: false } }).coverage?.status, 'partial')
+    assert.equal(normalizeAnalysis({ coverage: { status: 'complete', warnings: [], truncated: true } }).coverage?.status, 'partial')
+    assert.equal(normalizeAnalysis({ coverage: { status: 'complete', warnings: [], truncated: false } }).coverage?.status, 'complete')
+  })
+  it('preserves the input and applied policy fingerprints without trusting malformed fingerprints', () => {
+    const valid = { algorithm: 'sha256', value: 'a'.repeat(64) }
+    const analysis = normalizeAnalysis({
+      id: 'fingerprinted', score: 100,
+      source: { old: { fingerprint: valid }, new: { fingerprint: { algorithm: 'sha256', value: 'bad' } } },
+      policy: { id: 'team-policy', fingerprint: valid },
+    })
+    assert.deepEqual(analysis.source?.old.fingerprint, valid)
+    assert.equal(analysis.source?.new.fingerprint, undefined)
+    assert.deepEqual(analysis.policy, { id: 'team-policy', fingerprint: valid })
+  })
   it('normalizes a wrapped analysis and derives missing summary values', () => {
     const analysis = normalizeAnalysis({
       analysis: {
@@ -43,6 +81,21 @@ describe('response normalization', () => {
 })
 
 describe('AI response normalization', () => {
+  it('keeps V1.3 prompt identity without rewriting previous prompt versions', () => {
+    assert.equal(normalizeAiReview({ promptVersion: 'ai-explainer-v3' }).promptVersion, 'ai-explainer-v3')
+    assert.equal(normalizeAiReview({ promptVersion: 'ai-explainer-v1' }).promptVersion, 'ai-explainer-v1')
+  })
+  it('preserves saved review identity, focus, v2 prompt and evidence coverage', () => {
+    const report = normalizeAiReview({
+      id: 'saved-review', analysisId: 'analysis-1', language: 'zh-CN', focus: 'mobile migration',
+      promptVersion: 'ai-explainer-v2',
+      coverage: { totalFindings: 60, includedFindings: 50, omittedFindings: 10, includedChangeIds: ['CG-0001', 123] },
+    })
+    assert.equal(report.id, 'saved-review')
+    assert.equal(report.focus, 'mobile migration')
+    assert.equal(report.promptVersion, 'ai-explainer-v2')
+    assert.deepEqual(report.coverage, { totalFindings: 60, includedFindings: 50, omittedFindings: 10, includedChangeIds: ['CG-0001'] })
+  })
   it('keeps the legacy single-provider service status compatible', () => {
     assert.deepEqual(normalizeAiStatus({ enabled: true, configured: true, available: true, provider: 'deepseek', model: 'deepseek-chat' }), {
       enabled: true,

@@ -1,0 +1,33 @@
+{
+  "Tags": {
+    "name": "tags",
+    "in": "query",
+    "required": false,
+    "style": "form",
+    "explode": false,
+    "schema": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "PageSize": {
+    "name": "pageSize",
+    "in": "query",
+    "required": false,
+    "schema": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    }
+  },
+  "IncludeArchived": {
+    "name": "includeArchived",
+    "in": "query",
+    "required": false,
+    "schema": {
+      "type": "boolean"
+    }
+  }
+}

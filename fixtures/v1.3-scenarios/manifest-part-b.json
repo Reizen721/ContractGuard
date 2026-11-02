@@ -1,0 +1,526 @@
+[
+  {
+    "id": "identity-tenancy",
+    "title": "多租户身份与 SDK 迁移",
+    "scenario": "成员检索、邀请和会话撤销同时升级：收紧租户上下文与 OAuth 资格、移除认证替代方案、迁移 API-key 线上位置，并改变查询参数编码和 SDK 方法名。OAuth scope 声明本身保持不变，区别在操作实际要求；health 始终匿名且未变。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/members.json",
+        "paths/invitations.json",
+        "paths/sessions.json",
+        "parameters/tenant-header.json",
+        "parameters/roles-query.json",
+        "parameters/session-id.json",
+        "security/oauth.json",
+        "security/tenant-key.json",
+        "schemas/members.json",
+        "schemas/invitation.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/members.json",
+        "paths/invitations.json",
+        "paths/sessions.json",
+        "parameters/tenant-header.json",
+        "parameters/roles-query.json",
+        "parameters/session-id.json",
+        "security/oauth.json",
+        "security/tenant-key.json",
+        "schemas/members.json",
+        "schemas/invitation.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "PARAMETER_REQUIRED",
+          "severity": "breaking",
+          "location": "paths[\"/members\"].get.parameters.header[\"X-Tenant-Id\"].required"
+        },
+        {
+          "ruleId": "PARAMETER_SERIALIZATION_CHANGED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/members\"].get.parameters.query[\"roles\"].serialization"
+        },
+        {
+          "ruleId": "OPERATION_ID_CHANGED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/members\"].get.operationId"
+        },
+        {
+          "ruleId": "SECURITY_STRENGTHENED",
+          "severity": "breaking",
+          "location": "paths[\"/members\"].get.security"
+        },
+        {
+          "ruleId": "SECURITY_STRENGTHENED",
+          "severity": "breaking",
+          "location": "paths[\"/invitations\"].post.security"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "severity": "breaking",
+          "location": "paths[\"/invitations\"].post.requestBody.content[\"application/json\"].schema.properties[\"role\"].enum"
+        },
+        {
+          "ruleId": "SECURITY_SCHEME_CHANGED",
+          "severity": "breaking",
+          "location": "components.securitySchemes[\"TenantKey\"].in"
+        },
+        {
+          "ruleId": "SECURITY_SCHEME_CHANGED",
+          "severity": "breaking",
+          "location": "components.securitySchemes[\"TenantKey\"].name"
+        }
+      ],
+      "counterexamples": [
+        {
+          "change": "租户 header 由可选变必填",
+          "oldInteraction": "带有合法 members:read token 的 GET /members，没有 X-Tenant-Id。",
+          "why": "旧契约接受该请求；候选要求显式租户 header，旧客户端缺少它。"
+        },
+        {
+          "change": "roles 数组查询的 explode 从 true 改为 false",
+          "oldInteraction": "GET /members?roles=viewer&roles=editor。",
+          "why": "旧 form+explode 编码是重复键；候选要求逗号分隔，现有 SDK 的线上编码可能改变，需实测服务器兼容接收。"
+        },
+        {
+          "change": "成员操作 operationId 改名",
+          "oldInteraction": "已发布 SDK 调用 client.listMembers()。",
+          "why": "HTTP 路径仍存在，但重新生成 SDK 可能只提供 listTenantMembers()，影响业务代码编译或调用。"
+        },
+        {
+          "change": "成员查询移除 TenantKey 认证替代",
+          "oldInteraction": "仅持有租户 API key 的客户端调用 GET /members，不持有 OAuth token。",
+          "why": "即使独立完成 key 迁移，候选成员操作也只接受 OAuth；旧认证资格不再足够。"
+        },
+        {
+          "change": "邀请增加 members:invite scope",
+          "oldInteraction": "OAuth token 仅含 members:write，提交 email 与 role=editor 的 POST /invitations。",
+          "why": "旧 scope 足够；候选还要求 members:invite，旧 token 需要重新授权。"
+        },
+        {
+          "change": "邀请 role 移除 owner",
+          "oldInteraction": "带足够权限提交 {email:'a@example.invalid',role:'owner'}。",
+          "why": "旧请求枚举包含 owner，候选枚举不再接受它；该反例独立于鉴权变化。"
+        },
+        {
+          "change": "会话撤销的 API key 改为 cookie 且改名",
+          "oldInteraction": "DELETE /sessions/s1 携带 X-Tenant-Key: demo-key。",
+          "why": "旧方案从 header X-Tenant-Key 读取；候选从 cookie tenant_token 读取，原凭据位置和名称都失效。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "匿名健康检查的 operationId、响应和 security 均未改变，不应出现相关 finding。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "PARAMETER_REQUIRED",
+          "locationIncludes": "parameters.header[\"X-Tenant-Id\"].required",
+          "old": {
+            "file": "parameters/tenant-header.json",
+            "pointer": "#/required"
+          },
+          "new": {
+            "file": "parameters/tenant-header.json",
+            "pointer": "#/required"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "locationIncludes": "paths[\"/invitations\"].post.requestBody.content[\"application/json\"].schema.properties[\"role\"].enum",
+          "old": {
+            "file": "schemas/invitation.json",
+            "pointer": "#/properties/role/enum"
+          },
+          "new": {
+            "file": "schemas/invitation.json",
+            "pointer": "#/properties/role/enum"
+          }
+        },
+        {
+          "ruleId": "SECURITY_SCHEME_CHANGED",
+          "locationIncludes": "components.securitySchemes[\"TenantKey\"].name",
+          "old": {
+            "file": "security/tenant-key.json",
+            "pointer": "#/name"
+          },
+          "new": {
+            "file": "security/tenant-key.json",
+            "pointer": "#/name"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "multipart-assets",
+    "title": "多媒体资产上传与异步导入",
+    "scenario": "资产上传、异步导入、元数据查询同步升级。声明 sizeBytes 上限从10MiB降至2MiB，增加必填校验和、收紧名称与标签数量，撤销原始二进制上传入口，并调整响应保证。sizeBytes 仅是明确建模的声明值，不证明实际二进制长度；binary 与 multipart encoding 只能提示部分覆盖，不能假装完整验证传输行为。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/upload.json",
+        "paths/import.json",
+        "paths/asset.json",
+        "parameters/asset-id.json",
+        "schemas/binary-file.json",
+        "schemas/upload-form.json",
+        "schemas/import-request.json",
+        "schemas/asset.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/upload.json",
+        "paths/import.json",
+        "paths/asset.json",
+        "parameters/asset-id.json",
+        "schemas/binary-file.json",
+        "schemas/upload-form.json",
+        "schemas/import-request.json",
+        "schemas/asset.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "partial",
+      "findings": [
+        {
+          "ruleId": "REQUEST_MEDIA_TYPE_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/assets\"].post.requestBody.content[\"application/octet-stream\"]"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_ADDED",
+          "severity": "breaking",
+          "location": "paths[\"/assets\"].post.requestBody.content[\"multipart/form-data\"].schema.properties[\"checksum\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/assets\"].post.requestBody.content[\"multipart/form-data\"].schema.properties[\"sizeBytes\"].maximum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/assets\"].post.requestBody.content[\"multipart/form-data\"].schema.properties[\"filename\"].maxLength"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/assets\"].post.requestBody.content[\"multipart/form-data\"].schema.properties[\"tags\"].maxItems"
+        },
+        {
+          "ruleId": "REQUEST_BODY_REQUIRED",
+          "severity": "breaking",
+          "location": "paths[\"/assets/import\"].post.requestBody.required"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/assets/{assetId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"downloadUrl\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/assets/{assetId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"state\"].enum"
+        }
+      ],
+      "coverageCodes": [
+        "MEDIA_ENCODING_NOT_ANALYSED",
+        "SCHEMA_KEYWORD_PARTIAL"
+      ],
+      "counterexamples": [
+        {
+          "change": "撤销原始二进制媒体类型",
+          "oldInteraction": "POST /assets，Content-Type: application/octet-stream，body 为文件字节。",
+          "why": "旧入口明确接受该表示；候选只保留 multipart/form-data。"
+        },
+        {
+          "change": "checksum 从可选变必填",
+          "oldInteraction": "multipart 表单有 file、filename 和 sizeBytes，没有 checksum。",
+          "why": "旧表单允许省略校验和；候选 required 增加 checksum。"
+        },
+        {
+          "change": "声明文件大小上限收紧",
+          "oldInteraction": "multipart 声明 sizeBytes=8388608，其他字段满足两版约束。",
+          "why": "8MiB 的声明值低于旧10MiB上限，高于新2MiB上限；真实文件字节一致性仍须服务端验证。"
+        },
+        {
+          "change": "filename 最大长度收紧",
+          "oldInteraction": "上传一个180个ASCII字符的文件名。",
+          "why": "长度180曾满足255上限，新120上限拒绝它；这不是对二进制文件长度的推断。"
+        },
+        {
+          "change": "标签数组上限收紧",
+          "oldInteraction": "上传表单包含15个合法字符串标签。",
+          "why": "旧最多20个标签，新最多10个，原有效标签集合被拒绝。"
+        },
+        {
+          "change": "导入 body 由可选变必填",
+          "oldInteraction": "POST /assets/import 不带 body。",
+          "why": "旧操作允许无 body；候选要求 JSON 请求体。"
+        },
+        {
+          "change": "响应不再保证 downloadUrl",
+          "oldInteraction": "GET /assets/a1 的新响应 {assetId:'a1',state:'ready'}。",
+          "why": "候选允许缺少 URL，旧契约保证该字段，直接读取它的旧客户端可能失败。"
+        },
+        {
+          "change": "响应 state 增加 quarantined",
+          "oldInteraction": "旧客户端只处理 processing 和 ready 两个状态。",
+          "why": "候选可能返回 quarantined，穷举分支需要更新；按静态策略标记潜在风险。"
+        },
+        {
+          "change": "文件 part 编码限制改变（未精确分析）",
+          "oldInteraction": "旧 multipart file part 声明 Content-Type: application/octet-stream。",
+          "why": "候选 encoding 声明 image/png；当前引擎只提示未覆盖，必须用真实 multipart 请求验证网关和服务端是否继续接收旧表示。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "资产上传规则、编码和业务状态变化不应影响未变化的匿名健康检查。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "paths[\"/assets\"].post.requestBody.content[\"multipart/form-data\"].schema.properties[\"sizeBytes\"].maximum",
+          "old": {
+            "file": "schemas/upload-form.json",
+            "pointer": "#/properties/sizeBytes/maximum"
+          },
+          "new": {
+            "file": "schemas/upload-form.json",
+            "pointer": "#/properties/sizeBytes/maximum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "locationIncludes": "paths[\"/assets/{assetId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"state\"].enum",
+          "old": {
+            "file": "schemas/asset.json",
+            "pointer": "#/properties/state/enum"
+          },
+          "new": {
+            "file": "schemas/asset.json",
+            "pointer": "#/properties/state/enum"
+          }
+        },
+        {
+          "ruleId": "REQUEST_BODY_REQUIRED",
+          "locationIncludes": "paths[\"/assets/import\"].post.requestBody.required",
+          "old": {
+            "file": "paths/import.json",
+            "pointer": "#/post/requestBody/required"
+          },
+          "new": {
+            "file": "paths/import.json",
+            "pointer": "#/post/requestBody/required"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "iot-telemetry",
+    "title": "递归设备树与批量遥测配置",
+    "scenario": "递归设备树、两层批量采样和设备配置联动发布：收紧批次/采样点/测量/电量边界，移除事件模式，缩短采样间隔上限，同时扩张响应状态并移除HTTP配置分支。3.1 measurement $ref 旁 maximum 按合取收紧到80；递归等价和 oneOf 一般包含关系保持partial，不能把潜在提示当作已证明完整兼容。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/device.json",
+        "paths/telemetry.json",
+        "paths/configuration.json",
+        "parameters/device-id.json",
+        "schemas/device.json",
+        "schemas/telemetry.json",
+        "schemas/sample.json",
+        "schemas/measurement.json",
+        "schemas/configuration.json",
+        "schemas/http-delivery.json",
+        "schemas/mqtt-delivery.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "paths/device.json",
+        "paths/telemetry.json",
+        "paths/configuration.json",
+        "parameters/device-id.json",
+        "schemas/device.json",
+        "schemas/telemetry.json",
+        "schemas/sample.json",
+        "schemas/measurement.json",
+        "schemas/configuration.json",
+        "schemas/mqtt-delivery.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "partial",
+      "findings": [
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/devices/{deviceId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batches\"].maxItems"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batches\"].items.properties[\"samples\"].maxItems"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batches\"].items.properties[\"samples\"].items.properties[\"value\"].maximum"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"mode\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batteryPercent\"].maximum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/devices/{deviceId}/configuration\"].put.requestBody.content[\"application/json\"].schema.properties[\"samplingIntervalSeconds\"].maximum"
+        },
+        {
+          "ruleId": "SCHEMA_COMPOSITION_CHANGED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/devices/{deviceId}/configuration\"].put.requestBody.content[\"application/json\"].schema.properties[\"delivery\"].oneOf"
+        }
+      ],
+      "coverageCodes": [
+        "RECURSIVE_REFERENCE",
+        "SCHEMA_COMPOSITION_PARTIAL"
+      ],
+      "counterexamples": [
+        {
+          "change": "设备响应新增 degraded 状态",
+          "oldInteraction": "只处理 online/offline 的设备看板读取根节点或子节点状态。",
+          "why": "候选可能返回 degraded，旧穷举处理可能缺分支；递归模型的完整等价仍未被证明。"
+        },
+        {
+          "change": "每次遥测批次数从20降到10",
+          "oldInteraction": "一条遥测请求携带11个 batches，每个 batch 含一个合法 sample。",
+          "why": "此前11批合法，候选 maxItems=10 拒绝；这个边界与递归响应模型无关。"
+        },
+        {
+          "change": "每批采样点从1000降到500",
+          "oldInteraction": "一个 batch 含501个合法 samples。",
+          "why": "旧每批上限1000，候选500，设备原有缓存批量策略需要调整。"
+        },
+        {
+          "change": "3.1 ref 旁增加 maximum 合取",
+          "oldInteraction": "遥测 sample.value=100，measurement 基础 Schema 允许最大125。",
+          "why": "候选保留基础 ref，并额外要求 maximum=80；两者合取后100无效，不能用相邻字段覆盖或忽略 ref。"
+        },
+        {
+          "change": "请求移除 event 采样模式",
+          "oldInteraction": "{batteryPercent:50,mode:'event',batches:[{samples:[{sensorId:'s1',value:20}]}]}。",
+          "why": "event 在旧枚举内，候选只接受 periodic。"
+        },
+        {
+          "change": "电池百分比上界从100降到90",
+          "oldInteraction": "batteryPercent=95，其余遥测内容满足两版约束。",
+          "why": "95曾合法，候选最大90；虽然数值是正常物理范围，契约仍发生输入收紧。"
+        },
+        {
+          "change": "采样间隔上限从3600降到900秒",
+          "oldInteraction": "PUT configuration 使用 samplingIntervalSeconds=1800 和合法 mqtt delivery。",
+          "why": "30分钟曾满足旧60分钟上限，现在超过新15分钟上限。"
+        },
+        {
+          "change": "移除 HTTP delivery 的 oneOf 分支（保守提示）",
+          "oldInteraction": "{samplingIntervalSeconds:60,delivery:{protocol:'http',endpoint:'https://collector.example.invalid/ingest'}}。",
+          "why": "该对象恰好匹配旧HTTP分支，候选只保留MQTT。业务反例清楚，但当前通用组合规则仅给 potentially-breaking，并附部分覆盖提醒。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "独立健康检查没有引用递归设备或遥测 Schema，所有字段不变，不应出现 finding。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "locationIncludes": "paths[\"/devices/{deviceId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].enum",
+          "old": {
+            "file": "schemas/device.json",
+            "pointer": "#/properties/status/enum"
+          },
+          "new": {
+            "file": "schemas/device.json",
+            "pointer": "#/properties/status/enum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batteryPercent\"].maximum",
+          "old": {
+            "file": "schemas/telemetry.json",
+            "pointer": "#/properties/batteryPercent/maximum"
+          },
+          "new": {
+            "file": "schemas/telemetry.json",
+            "pointer": "#/properties/batteryPercent/maximum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "paths[\"/devices/{deviceId}/telemetry\"].post.requestBody.content[\"application/json\"].schema.properties[\"batches\"].items.properties[\"samples\"].items.properties[\"value\"].maximum",
+          "old": {
+            "file": "schemas/measurement.json",
+            "pointer": "#/maximum"
+          },
+          "new": {
+            "file": "schemas/sample.json",
+            "pointer": "#/properties/value/maximum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "paths[\"/devices/{deviceId}/configuration\"].put.requestBody.content[\"application/json\"].schema.properties[\"samplingIntervalSeconds\"].maximum",
+          "old": {
+            "file": "schemas/configuration.json",
+            "pointer": "#/properties/samplingIntervalSeconds/maximum"
+          },
+          "new": {
+            "file": "schemas/configuration.json",
+            "pointer": "#/properties/samplingIntervalSeconds/maximum"
+          }
+        }
+      ]
+    }
+  }
+]

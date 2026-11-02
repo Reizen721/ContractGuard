@@ -1,8 +1,10 @@
 # 多 LLM AI 报告解释器
 
-ContractGuard V1.1 的 AI 报告解释器可以在服务端配置多个 LLM 档案，并由用户从管理员允许的档案中选择。首版通过 OpenAI-compatible Chat Completions 协议支持 DeepSeek、OpenAI、Gemini 和 Ollama；它不包含 Anthropic 原生协议，也不会在失败时自动把数据转发给另一个提供方。
+ContractGuard 的 AI 报告解释器可以在服务端配置多个 LLM 档案，并由用户从管理员允许的档案中选择。当前通过 OpenAI-compatible Chat Completions 协议支持 DeepSeek、OpenAI、Gemini 和 Ollama；它不包含 Anthropic 原生协议，也不会在失败时自动把数据转发给另一个提供方。V1.2 增加解读本地保存、受控复用、下载与实际证据集合校验。
 
-AI 功能默认关闭且不是兼容性分析的前置条件。所有严重等级、得分、`compatible` 和 CI 退出码仍由确定性规则引擎产生。
+V1.4 新解读使用 `ai-explainer-v4`：保留 V1.3 的覆盖状态、数量、截断标记和最多 30 个告警代码，并增加调用方证据摘要和最多 16 条失败／待确认检查元数据。不发送原始请求／响应样例、expectation、负责人、诊断全文、原始多文件内容或完整依赖清单。模型必须说明有限样例与未覆盖语义的限制，不能把高分或样例通过解释为生产保证；既有 v1/v2/v3 保存解读仍按原版本读取。输入与独立门禁见 [V1.4 指南](./v1.4-consumer-impact.md)，多文件边界见 [V1.3 指南](./v1.3-upgrade.md)。
+
+AI 功能默认关闭且不是分析的前置条件。静态严重等级、得分和 `compatible` 由规则引擎产生；调用方检查由独立的确定性证据引擎产生。CI 不使用模型输出。
 
 ## 1. 工作边界
 
@@ -17,8 +19,8 @@ flowchart LR
     V --> E[摘要、迁移计划、测试建议]
 ```
 
-- 规则引擎是唯一兼容性判定来源；模型不能修改 finding、分数或门禁。
-- 模型只解释已经产生的 finding，并且输出必须通过本地结构、长度、枚举和 `changeId` 校验。
+- 静态规则与调用方证据检查分别确定性计算；模型不能修改 finding、分数或任一门禁。
+- 模型解释已经产生的 finding 和有限检查元数据，输出必须通过本地结构、长度、枚举和 `changeId` 校验。调用方检查 ID 不是静态 change ID，不能混用；两份规范没有差异而样例失败时，应在摘要／限制中说明，不得补造 finding。
 - 未启用、凭据缺失、超时或上游失败时，普通分析、CLI、导出和历史记录继续工作。
 - 浏览器只能选择服务端公布的档案 ID，不能提交任意 URL、模型、请求头或密钥。
 
@@ -250,7 +252,7 @@ curl http://localhost:8080/api/ai/status
   "available": true,
   "provider": "deepseek",
   "model": "deepseek-flash",
-  "promptVersion": "ai-explainer-v1",
+  "promptVersion": "ai-explainer-v4",
   "activeProfile": "deepseek-cloud",
   "activeProviderId": "deepseek-cloud",
   "defaultProviderId": "deepseek-cloud",
@@ -307,7 +309,7 @@ curl -X POST http://localhost:8080/api/analyses/ANALYSIS_ID/ai-review \
   "providerLabel": "DeepSeek",
   "model": "deepseek-flash",
   "generatedAt": "2026-09-23T08:00:00.000Z",
-  "promptVersion": "ai-explainer-v1",
+  "promptVersion": "ai-explainer-v4",
   "overview": {
     "headline": "候选接口包含需要优先处理的破坏性变化",
     "executiveSummary": "应保留兼容入口并分阶段迁移消费者。",
@@ -322,6 +324,29 @@ curl -X POST http://localhost:8080/api/analyses/ANALYSIS_ID/ai-review \
 
 完整请求与响应字段见 [REST API 文档](./api-reference.md)。
 
+### V1.2：保存、复用与重新生成
+
+通过结构与证据校验的解读会保存到 `CONTRACTGUARD_DATA_DIR/ai-reviews/{analysisId}/{reviewId}.json`。`GET /api/analyses/{id}/ai-reviews` 读取已保存解读，AI 当前关闭或 key 缺失时仍可查看；读取和下载不产生模型调用。`GET /api/analyses/{id}/ai-reviews/{reviewId}/report?format=json` 或 `format=markdown` 下载对应版本。
+
+默认 POST 会先校验当前所选档案的权限与配置，再复用同一分析、相关档案配置、引擎/提示词、语言和关注点匹配的成功结果。需要新的解释时显式加入 `"force": true`。该操作可能再次计费，不会自动跨 Provider fallback；相同的进行中请求仍可合并，避免重复调用。返回历史结果时，生成时间和 token usage 属于原调用，而不是本次读取。
+
+新响应还带有 `id`、`language`、可选 `focus` 与服务端计算的 `coverage`：
+
+```json
+{
+  "totalFindings": 12,
+  "includedFindings": 2,
+  "omittedFindings": 10,
+  "includedChangeIds": ["CG-0001", "CG-0002"]
+}
+```
+
+以上是 `coverage` 对象示例。所有模型引用必须属于实际发送的 ID 集合，未发送的十条风险不算已经获得解释。模型 prose 即使格式合法仍可能错误；服务端提示裁剪、意见冲突或人工核验要求，不会替模型修改规则门禁。重点消费者是可能影响的对象，不是基于生产流量识别出的真实客户名单。
+
+V1.4 在调用方门禁为 blocked 或 review 时，始终附加服务端生成的提醒，包括静态破坏数为零而模型给出 low 的情况。保存与读取会保留这些提醒；最多 6 条模型 caveats 加 3 条服务端提醒。它用于保留确定性结论，不把模型的低风险文字改装成已经验证的事实。
+
+删除分析会一并删除其解读，生成中删除也不会在完成后重新留下孤立报告。失败或取消的调用不会保存成成功结果。旧版本未保存的解读不能自动找回；升级操作见 [V1.2 升级指南](./v1.2-upgrade.md)。
+
 ## 10. 发送给模型的数据
 
 默认不会发送 baseline 或 candidate 的原始 OpenAPI 文本，也不会发送 finding 的完整 `before`/`after` 对象。服务端只发送：
@@ -329,9 +354,11 @@ curl -X POST http://localhost:8080/api/analyses/ANALYSIS_ID/ai-review \
 - 分析 ID、显示文件名和有限版本元数据；
 - 确定性得分、兼容结论与分类计数；
 - 最多 `defaults.maxChanges` 条经过裁剪的 finding；
+- 静态 coverage 状态、告警数量／截断标记及最多 30 个告警代码；
+- 调用方 gate、摘要、未关联风险数，以及最多 16 条失败／待确认检查的 consumerId、checkId、kind、状态、最多 8 个问题代码及最多 10 个已发送 finding 中的关联 ID；
 - 输出语言和可选 `focus`。
 
-finding 只保留 ID、rule ID、severity、category、location、message 和可选 recommendation。尽管已经最小化，路径、消息和建议仍可能暴露内部接口或业务名称。选择任何云端档案前，都应完成数据分级、脱敏和组织审批；选择页面中的另一个 Provider 意味着数据会发送到该 Provider 所代表的边界。
+finding 只保留 ID、rule ID、severity、category、location、message 和可选 recommendation。调用方上下文不包含原始样例、assertion Schema、负责人或诊断全文；列表可能因预算截断，不能宣称解释了全部调用方。尽管已经最小化，路径、消息、建议和 ID 仍可能暴露内部业务信息。云端档案须符合实际数据边界；切换 Provider 意味着上下文会发送到该 Provider。
 
 ## 11. 错误与降级
 
@@ -348,7 +375,7 @@ finding 只保留 ID、rule ID、severity、category、location、message 和可
 | `502` | `AI_UPSTREAM_ERROR` | 检查账号、模型、配额与端点；服务不会返回上游正文 |
 | `502` | `AI_INVALID_RESPONSE` | 核对能力声明、输出上限和所选模型的结构化输出能力 |
 
-502/504 不会使原确定性报告失效。不要在无限循环中自动重试可能计费的请求。V1.1 没有自动 fallback：上游失败后不会把同一份 finding 隐式发送给另一家服务。
+502/504 不会使原确定性报告失效。不要在无限循环中自动重试可能计费的请求。上游失败后不会把同一份 finding 隐式发送给另一家服务。
 
 ## 12. 旧版 DeepSeek 兼容模式
 

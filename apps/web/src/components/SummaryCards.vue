@@ -1,36 +1,19 @@
 <script setup lang="ts">
 import type { AnalysisRecord } from '../types'
-
 defineProps<{ analysis: AnalysisRecord }>()
 </script>
-
 <template>
-  <div class="summary-grid" aria-label="分析摘要">
-    <article class="score-card" :class="analysis.compatible ? 'is-pass' : 'is-fail'">
-      <div class="score-ring" :style="{ '--score': `${analysis.score * 3.6}deg` }">
-        <div>
-          <strong>{{ analysis.score }}</strong>
-          <span>/ 100</span>
-        </div>
-      </div>
-      <div>
-        <p class="eyebrow">兼容性评分</p>
-        <h3>{{ analysis.compatible ? '通过兼容性门禁' : '发现阻断性变更' }}</h3>
-        <p>评分用于风险排序；最终决策应结合调用方使用方式。</p>
-      </div>
-    </article>
-
-    <article class="metric-card metric-card--danger">
-      <div><strong>{{ analysis.summary.breaking }}</strong><span>破坏性变更</span></div>
-    </article>
-    <article class="metric-card metric-card--warning">
-      <div><strong>{{ analysis.summary.potentiallyBreaking }}</strong><span>潜在风险</span></div>
-    </article>
-    <article class="metric-card metric-card--success">
-      <div><strong>{{ analysis.summary.nonBreaking }}</strong><span>兼容变更</span></div>
-    </article>
-    <article class="metric-card metric-card--neutral">
-      <div><strong>{{ analysis.summary.info }}</strong><span>信息提示</span></div>
-    </article>
-  </div>
+  <section class="analysis-summary" aria-label="分析摘要">
+    <div class="analysis-verdict" :class="analysis.compatible ? 'is-pass' : 'is-fail'">
+      <h3>{{ analysis.compatible ? '未发现确定性破坏' : '发现阻断性变更' }}</h3>
+      <p>规则判定 · {{ analysis.summary.potentiallyBreaking ? '仍有潜在风险需要复核。' : '' }}未覆盖语义与实际调用方行为仍需验证。</p>
+    </div>
+    <dl class="analysis-counts">
+      <div><dt>破坏性变更</dt><dd class="status-danger">{{ analysis.summary.breaking }}</dd></div>
+      <div><dt>潜在风险</dt><dd class="status-warning">{{ analysis.summary.potentiallyBreaking }}</dd></div>
+      <div><dt>兼容变更</dt><dd>{{ analysis.summary.nonBreaking }}</dd></div>
+      <div><dt>信息提示</dt><dd>{{ analysis.summary.info }}</dd></div>
+    </dl>
+    <p class="score-note">风险排序参考分 <strong>{{ analysis.score }}/100</strong>，不代表兼容性保证。</p>
+  </section>
 </template>

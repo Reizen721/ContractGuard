@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { generateAiReview, getAiStatus } from '../api'
+import { downloadAiReview, generateAiReview, getAiStatus, listAiReviews } from '../api'
 import type { AiReviewReport, AiRiskLevel, AiServiceStatus } from '../types'
 import { formatDate, selectableAiProviders } from '../utils'
 
@@ -14,9 +14,17 @@ const generating = ref(false)
 const statusError = ref('')
 const reviewError = ref('')
 const selectedProviderId = ref('')
+const savedReviews = ref<AiReviewReport[]>([])
+const savedLoading = ref(false)
+const savedError = ref('')
+const exportError = ref('')
+const exporting = ref(false)
 let requestSequence = 0
+let generationRevision = 0
 let statusController: AbortController | null = null
 let reviewController: AbortController | null = null
+let savedController: AbortController | null = null
+let settingsEdited = false
 
 const riskLabels: Record<AiRiskLevel, string> = {
   critical: '严重风险',
@@ -101,9 +109,114 @@ function providerModelLabel(provider: string, model: string): string {
 function reportProviderLabel(value: AiReviewReport): string {
   if (value.providerLabel) return providerModelLabel(value.providerLabel, value.model)
   const profile = status.value?.providers.find(
-    (provider) => provider.id === value.providerId || provider.provider === value.provider,
+    (provider) => provider.id === value.providerId,
   )
   return providerModelLabel(profile?.displayName ?? value.provider, value.model)
+}
+
+function reviewKey(value: AiReviewReport): string {
+  return value.id ?? `${value.providerId ?? value.provider}:${value.generatedAt}:${value.focus ?? ''}`
+}
+
+function mergeSavedReviews(values: AiReviewReport[]): void {
+  const reviews = new Map<string, AiReviewReport>()
+  // Newer local generation wins over a delayed history response with the same ID.
+  for (const review of [...savedReviews.value, ...values]) {
+    if (review.analysisId === props.analysisId && !reviews.has(reviewKey(review))) reviews.set(reviewKey(review), review)
+  }
+  savedReviews.value = [...reviews.values()].sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
+}
+
+function restoreMatchingReview(): void {
+  if (generating.value) return
+  const sameProvider = (review: AiReviewReport): boolean => hasProviderProfiles.value
+    ? review.providerId === selectedProviderId.value && review.model === selectedProvider.value?.model
+      && review.provider === selectedProvider.value?.provider
+    : review.provider === status.value?.provider && review.model === status.value?.model
+  report.value = savedReviews.value.find((review) =>
+    review.analysisId === props.analysisId
+    && (review.language ?? 'zh-CN') === 'zh-CN'
+    && (review.focus ?? '') === focus.value.trim()
+    && sameProvider(review),
+  ) ?? null
+  if (!report.value && !settingsEdited) {
+    const recent = savedReviews.value.find((review) => sameProvider(review) && (review.language ?? 'zh-CN') === 'zh-CN')
+    if (recent) {
+      focus.value = recent.focus ?? ''
+      report.value = recent
+    }
+  }
+  // Viewing a saved artifact is independent of whether its old provider is
+  // currently configured. Its actual provider/model remain on the report.
+  if (!report.value && !serviceAvailable.value && savedReviews.value.length) report.value = savedReviews.value[0]!
+}
+
+function updateFocus(event: Event): void {
+  settingsEdited = true
+  focus.value = (event.target as HTMLTextAreaElement).value
+}
+
+function updateProvider(event: Event): void {
+  settingsEdited = true
+  selectedProviderId.value = (event.target as HTMLSelectElement).value
+}
+
+async function loadSavedReviews(): Promise<void> {
+  savedController?.abort()
+  const controller = new AbortController()
+  savedController = controller
+  const analysisId = props.analysisId
+  const revision = generationRevision
+  savedLoading.value = true
+  savedError.value = ''
+  try {
+    const values = await listAiReviews(analysisId, controller.signal)
+    if (controller.signal.aborted || savedController !== controller || analysisId !== props.analysisId) return
+    mergeSavedReviews(values)
+    if (revision === generationRevision) restoreMatchingReview()
+  } catch (error) {
+    if (controller.signal.aborted || savedController !== controller) return
+    savedError.value = errorMessage(error)
+  } finally {
+    if (savedController === controller) {
+      savedController = null
+      savedLoading.value = false
+    }
+  }
+}
+
+function cancelGeneration(): void {
+  requestSequence += 1
+  reviewController?.abort()
+  reviewController = null
+  generating.value = false
+}
+
+function selectSavedReview(event: Event): void {
+  cancelGeneration()
+  const key = (event.target as HTMLSelectElement).value
+  const saved = savedReviews.value.find((review) => reviewKey(review) === key) ?? null
+  settingsEdited = true
+  if (saved) {
+    focus.value = saved.focus ?? ''
+    if (availableProviders.value.some((provider) => provider.id === saved.providerId)) selectedProviderId.value = saved.providerId!
+  }
+  report.value = saved
+  reviewError.value = ''
+  exportError.value = ''
+}
+
+async function exportReview(format: 'json' | 'markdown'): Promise<void> {
+  if (!report.value?.id || exporting.value) return
+  exporting.value = true
+  exportError.value = ''
+  try {
+    await downloadAiReview(report.value, format)
+  } catch (error) {
+    exportError.value = errorMessage(error)
+  } finally {
+    exporting.value = false
+  }
 }
 
 function chooseProvider(nextStatus: AiServiceStatus): void {
@@ -127,6 +240,7 @@ async function loadStatus(): Promise<void> {
     if (statusController !== controller) return
     status.value = nextStatus
     chooseProvider(nextStatus)
+    restoreMatchingReview()
   } catch (error) {
     if (isAbortError(error) || statusController !== controller) return
     status.value = null
@@ -139,17 +253,18 @@ async function loadStatus(): Promise<void> {
   }
 }
 
-async function generate(): Promise<void> {
+async function generate(force = false): Promise<void> {
   if (!canGenerate.value) return
   reviewController?.abort()
   const controller = new AbortController()
   reviewController = controller
   const sequence = ++requestSequence
+  generationRevision += 1
   const analysisId = props.analysisId
   const providerId = hasProviderProfiles.value ? selectedProviderId.value : ''
   generating.value = true
   reviewError.value = ''
-  report.value = null
+  exportError.value = ''
 
   try {
     const trimmedFocus = focus.value.trim()
@@ -157,8 +272,12 @@ async function generate(): Promise<void> {
       language: 'zh-CN',
       ...(trimmedFocus ? { focus: trimmedFocus } : {}),
       ...(providerId ? { providerId } : {}),
+      ...(force ? { force: true } : {}),
     }, controller.signal)
-    if (sequence === requestSequence && analysisId === props.analysisId) report.value = result
+    if (sequence === requestSequence && analysisId === props.analysisId) {
+      mergeSavedReviews([result])
+      report.value = result
+    }
   } catch (error) {
     if (isAbortError(error)) return
     if (sequence === requestSequence && analysisId === props.analysisId) {
@@ -173,28 +292,35 @@ async function generate(): Promise<void> {
 watch(
   () => props.analysisId,
   () => {
-    requestSequence += 1
-    reviewController?.abort()
-    reviewController = null
+    cancelGeneration()
+    settingsEdited = false
+    savedController?.abort()
     focus.value = ''
     report.value = null
     reviewError.value = ''
-    generating.value = false
+    savedReviews.value = []
+    savedError.value = ''
+    exportError.value = ''
+    void loadSavedReviews()
   },
 )
 
-watch(selectedProviderId, () => {
-  report.value = null
+watch([selectedProviderId, focus], () => {
+  cancelGeneration()
   reviewError.value = ''
-})
+  restoreMatchingReview()
+}, { flush: 'sync' })
 
-onMounted(() => void loadStatus())
+onMounted(() => {
+  void loadStatus()
+  void loadSavedReviews()
+})
 onBeforeUnmount(() => {
-  requestSequence += 1
+  cancelGeneration()
   statusController?.abort()
-  reviewController?.abort()
+  savedController?.abort()
   statusController = null
-  reviewController = null
+  savedController = null
 })
 </script>
 
@@ -234,8 +360,8 @@ onBeforeUnmount(() => {
       <button class="button button--quiet button--small" type="button" @click="loadStatus">重新检测</button>
     </div>
 
-    <template v-else>
-      <div class="ai-controls">
+    <template v-if="!statusLoading">
+      <div v-if="serviceAvailable" class="ai-controls">
         <div class="ai-focus-field">
           <div class="ai-focus-field__label">
             <label for="ai-review-focus">本次特别关注 <span>可选</span></label>
@@ -243,7 +369,8 @@ onBeforeUnmount(() => {
           </div>
           <textarea
             id="ai-review-focus"
-            v-model="focus"
+            :value="focus"
+            @input="updateFocus"
             maxlength="500"
             rows="3"
             aria-describedby="ai-focus-hint"
@@ -256,8 +383,9 @@ onBeforeUnmount(() => {
           <select
             v-if="hasProviderProfiles"
             id="ai-provider-select"
-            v-model="selectedProviderId"
-            :disabled="generating || !status?.allowRequestProviderOverride || availableProviders.length <= 1"
+            :value="selectedProviderId"
+            @change="updateProvider"
+            :disabled="!status?.allowRequestProviderOverride || availableProviders.length <= 1"
           >
             <option v-for="provider in availableProviders" :key="provider.id" :value="provider.id">
               {{ providerModelLabel(provider.displayName, provider.model) }}
@@ -269,13 +397,25 @@ onBeforeUnmount(() => {
             type="button"
             :disabled="!canGenerate"
             :aria-busy="generating"
-            @click="generate"
+            @click="generate(false)"
           >
             <span v-if="generating" class="spinner"></span>
-            {{ generating ? '正在生成解读…' : report ? '重新生成 AI 解读' : '生成 AI 解读' }}
+            {{ generating ? '正在生成解读…' : '生成或读取 AI 解读' }}
           </button>
+          <button v-if="report" class="text-button" type="button" :disabled="!canGenerate" @click="generate(true)">按当前选项重新生成（调用模型）</button>
         </div>
       </div>
+
+      <div class="ai-saved-toolbar">
+        <label v-if="savedReviews.length" for="ai-saved-select">已保存的解读</label>
+        <select v-if="savedReviews.length" id="ai-saved-select" :value="report ? reviewKey(report) : ''" @change="selectSavedReview">
+          <option value="">选择已保存报告</option>
+          <option v-for="review in savedReviews" :key="reviewKey(review)" :value="reviewKey(review)">{{ reportProviderLabel(review) }} · {{ formatDate(review.generatedAt) }} · {{ review.focus || '无特别关注' }}</option>
+        </select>
+        <span v-if="savedLoading" role="status">正在读取已保存解读…</span>
+        <button v-if="generating" class="button button--quiet button--small" type="button" @click="cancelGeneration">取消生成</button>
+      </div>
+      <div v-if="savedError" class="inline-error" role="alert"><p>无法读取已保存解读：{{ savedError }}</p><button class="text-button" type="button" @click="loadSavedReviews">重试读取</button></div>
 
       <div v-if="generating" class="ai-generating" aria-live="polite">
         <span class="spinner" aria-hidden="true"></span>
@@ -287,7 +427,7 @@ onBeforeUnmount(() => {
 
       <div v-else-if="reviewError" class="ai-review-error" role="alert">
         <div><strong>AI 解读生成失败</strong><p>{{ reviewError }}</p></div>
-        <button class="button button--quiet button--small" type="button" @click="generate">重试</button>
+        <button class="button button--quiet button--small" type="button" :disabled="!canGenerate" @click="generate(false)">重试</button>
       </div>
 
       <article v-else-if="report" class="ai-report" aria-labelledby="ai-report-headline">
@@ -301,6 +441,15 @@ onBeforeUnmount(() => {
           </div>
           <h3 id="ai-report-headline">{{ report.overview.headline }}</h3>
           <p>{{ report.overview.executiveSummary }}</p>
+          <p class="ai-evidence-note">AI 风险等级与建议属于解释，不是规则门禁结论。消费者影响是待验证的推测，不代表已检查真实客户端。</p>
+          <p v-if="report.coverage" class="ai-evidence-note">解释输入覆盖 {{ report.coverage.includedFindings }} / {{ report.coverage.totalFindings }} 条变更；{{ report.coverage.omittedFindings }} 条未发送给模型。引用已校验为本次输入中的变更，但不代表每条解释都正确。</p>
+          <p v-if="report.focus" class="ai-evidence-note">此报告关注点：{{ report.focus }}</p>
+          <div v-if="report.id" class="ai-export-actions">
+            <span>已保存，可在历史报告中重开</span>
+            <button class="text-button" type="button" :disabled="exporting" @click="exportReview('markdown')">导出 AI 解读 Markdown</button>
+            <button class="text-button" type="button" :disabled="exporting" @click="exportReview('json')">导出 AI 解读 JSON</button>
+          </div>
+          <p v-if="exportError" role="alert">{{ exportError }}</p>
         </header>
 
         <section class="ai-report__section" aria-labelledby="ai-key-risks-title">
@@ -315,7 +464,7 @@ onBeforeUnmount(() => {
                 <h4>{{ risk.title }}</h4>
               </header>
               <p>{{ risk.explanation }}</p>
-              <div v-if="risk.affectedConsumers.length" class="ai-chip-row" aria-label="受影响的消费者">
+              <div v-if="risk.affectedConsumers.length" class="ai-chip-row" aria-label="可能受影响的消费者（需验证）">
                 <span v-for="consumer in risk.affectedConsumers" :key="consumer">{{ consumer }}</span>
               </div>
               <div class="ai-remediation"><strong>建议处置</strong><p>{{ risk.remediation }}</p></div>

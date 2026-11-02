@@ -1,0 +1,12 @@
+post:
+  operationId: receiveOrderCreated
+  summary: Partner receives an order-created notification
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ./event.yaml
+  responses:
+    '204':
+      description: Notification accepted

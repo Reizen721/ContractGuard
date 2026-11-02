@@ -1,0 +1,10 @@
+{
+  "description": "Order state",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/order.json"
+      }
+    }
+  }
+}

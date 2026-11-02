@@ -1,3 +1,44 @@
+import type { ContractBundleInput } from './types'
+
+export function sampleBundles(): { baseline: ContractBundleInput; candidate: ContractBundleInput } {
+  const entry = (version: string, webhook: boolean) => `openapi: ${version}
+info: { title: Order Service, version: '${webhook ? '2' : '1'}' }
+paths:
+  /orders/{id}:
+    get:
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/order.yaml'
+${webhook ? `webhooks:
+  orderUpdated:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: './schemas/order.yaml' }
+      responses:
+        '200': { description: Notification accepted }
+` : ''}`
+  const schema = (candidate: boolean) => `type: object
+required: [id, status]
+additionalProperties: false
+properties:
+  id: { type: ${candidate ? 'integer' : 'string'} }
+  status: { type: string, enum: [open, closed${candidate ? ', archived' : ''}] }
+  note: ${candidate ? '{ type: [string, "null"] }' : '{ type: string, nullable: true }'}
+`
+  return {
+    baseline: { kind: 'bundle', entry: 'openapi.yaml', files: [{ path: 'openapi.yaml', content: entry('3.0.4', false) }, { path: 'schemas/order.yaml', content: schema(false) }] },
+    candidate: { kind: 'bundle', entry: 'openapi.yaml', files: [{ path: 'openapi.yaml', content: entry('3.1.0', true) }, { path: 'schemas/order.yaml', content: schema(true) }] },
+  }
+}
+
 export const sampleBaseline = `openapi: 3.0.3
 info:
   title: Campus Events API

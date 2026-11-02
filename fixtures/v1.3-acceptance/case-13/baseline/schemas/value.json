@@ -1,0 +1,4 @@
+{
+  "$schema": "https://example.invalid/dialects/custom",
+  "type": "string"
+}

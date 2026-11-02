@@ -1,0 +1,798 @@
+{
+  "schemaVersion": 1,
+  "suite": "ContractGuard V1.6 real Codex host acceptance",
+  "description": "10 independently specified synthetic OpenAPI changes: 6 breaking, 1 potentially breaking, 3 non-breaking. Expected outcomes are native ContractGuard default-policy findings; host execution must be verified separately.",
+  "cases": [
+    {
+      "id": "CG-CODEX-01",
+      "title": "电商旧订单接口下线",
+      "scenario": "删除 GET /legacy-orders 整条路径。",
+      "why": "旧版移动端仍会请求此地址；路径消失后将无法取得订单，属于明确破坏。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "PATH_REMOVED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Order API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/legacy-orders": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Order API",
+          "version": "1.0.0"
+        },
+        "paths": {}
+      }
+    },
+    {
+      "id": "CG-CODEX-02",
+      "title": "多租户服务新增必填请求头",
+      "scenario": "GET /invoices 新增必填 X-Tenant-Id 请求头。",
+      "why": "旧客户端没有传租户头，原本合法的请求将不再满足契约。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "PARAMETER_ADDED_REQUIRED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Billing API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/invoices": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Billing API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/invoices": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "X-Tenant-Id",
+                  "in": "header",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-03",
+      "title": "支付方式枚举收窄",
+      "scenario": "POST /payments 的 method 从 card、wallet 变为仅 card，使用 OpenAPI 3.1.0。",
+      "why": "原本发送 wallet 的合法请求被排除，需要迁移对应调用方。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "SCHEMA_ENUM_NARROWED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Payment API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/payments": {
+            "post": {
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": [
+                            "card",
+                            "wallet"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "method"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Payment API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/payments": {
+            "post": {
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "enum": [
+                            "card"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "method"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-04",
+      "title": "物流追踪编号类型改变",
+      "scenario": "GET /shipment 的 trackingId 从 string 变为 integer。",
+      "why": "客户端按字符串解析追踪编号，类型改变可能使反序列化失败，也可能丢失前导零。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "SCHEMA_TYPE_CHANGED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Shipping API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/shipment": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "trackingId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "trackingId"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Shipping API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/shipment": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "trackingId": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "trackingId"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-05",
+      "title": "任务状态增加新枚举值",
+      "scenario": "GET /jobs 的 state 在 queued、running、done 之外增加 paused，使用 OpenAPI 3.1.0。",
+      "why": "客户端穷举状态时可能遗漏 paused；本规则标为潜在破坏，compatible=true 仅表示没有 breaking，不能当作零风险。",
+      "expected": {
+        "compatible": true,
+        "ruleIds": [
+          "SCHEMA_ENUM_WIDENED"
+        ],
+        "severities": [
+          "potentially-breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 0,
+          "potentiallyBreaking": 1,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Job API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/jobs": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "running",
+                              "done"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Job API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/jobs": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "running",
+                              "done",
+                              "paused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "state"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-06",
+      "title": "用户响应不再保证 email 存在",
+      "scenario": "GET /profile 保留 email 字段定义，但从 required 中移除，使用 OpenAPI 3.1.0。",
+      "why": "字段并未删除，但旧客户端依赖它每次都有；新契约允许缺失，仍应识别为破坏。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "SCHEMA_REQUIRED_PROPERTY_REMOVED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Identity API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/profile": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Identity API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/profile": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-07",
+      "title": "异步导出成功响应被移除",
+      "scenario": "POST /exports 原有 200 与 202 响应，候选删除 202。",
+      "why": "现有客户端可能依赖 202 进入后台任务轮询；成功状态契约删除应提示迁移。",
+      "expected": {
+        "compatible": false,
+        "ruleIds": [
+          "RESPONSE_STATUS_REMOVED"
+        ],
+        "severities": [
+          "breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 1,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 0,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Export API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/exports": {
+            "post": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                },
+                "202": {
+                  "description": "Accepted for asynchronous export"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Export API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/exports": {
+            "post": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-08",
+      "title": "搜索增加可选筛选参数",
+      "scenario": "GET /products 新增可选 query 参数 category。",
+      "why": "旧客户端仍可不传该参数；新增功能不缩小旧请求的合法范围。",
+      "expected": {
+        "compatible": true,
+        "ruleIds": [
+          "PARAMETER_ADDED_OPTIONAL"
+        ],
+        "severities": [
+          "non-breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 0,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 1,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Catalog API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/products": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Catalog API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/products": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "category",
+                  "in": "query",
+                  "required": false,
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-09",
+      "title": "监控平台新增独立接口",
+      "scenario": "保留 GET /health，新增 GET /metrics。",
+      "why": "已有路径与行为没有变化，新增独立能力不应被误报为破坏。",
+      "expected": {
+        "compatible": true,
+        "ruleIds": [
+          "PATH_ADDED"
+        ],
+        "severities": [
+          "non-breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 0,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 1,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Monitoring API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/health": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.0.4",
+        "info": {
+          "title": "Monitoring API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/health": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          },
+          "/metrics": {
+            "get": {
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "CG-CODEX-10",
+      "title": "备注长度限制放宽",
+      "scenario": "POST /notes 的 text.maxLength 从 100 放宽到 500，使用 OpenAPI 3.1.0。",
+      "why": "所有原来允许的文本仍被接受；用于验证请求方向的约束放宽应判兼容。",
+      "expected": {
+        "compatible": true,
+        "ruleIds": [
+          "SCHEMA_CONSTRAINT_RELAXED"
+        ],
+        "severities": [
+          "non-breaking"
+        ],
+        "summary": {
+          "total": 1,
+          "breaking": 0,
+          "potentiallyBreaking": 0,
+          "nonBreaking": 1,
+          "info": 0
+        }
+      },
+      "baseline": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Notes API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/notes": {
+            "post": {
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "maxLength": 100
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      },
+      "candidate": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "Notes API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/notes": {
+            "post": {
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ]
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Success"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "required": false,
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/submit.json"
+      }
+    },
+    "application/x-ndjson": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  }
+}

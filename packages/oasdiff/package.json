@@ -1,0 +1,20 @@
+{
+  "name": "@contractguard/oasdiff",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Pinned upstream oasdiff integration and bounded offline execution for ContractGuard.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test tests/*.test.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": { "@contractguard/core": "workspace:*", "yaml": "^2.8.1" },
+  "devDependencies": { "@types/node": "^22.18.0" },
+  "engines": { "node": ">=22.13" }
+}

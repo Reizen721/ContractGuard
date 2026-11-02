@@ -10,6 +10,48 @@ export interface ChangeRecord {
   before?: unknown
   after?: unknown
   recommendation?: string
+  sourceLocations?: { old?: ContractSourceLocation; new?: ContractSourceLocation }
+}
+
+export interface ContractSourceLocation {
+  file: string
+  pointer: string
+}
+
+export interface ContractFile {
+  path: string
+  content: string
+}
+
+export interface ContractBundleInput {
+  kind: 'bundle'
+  entry: string
+  files: ContractFile[]
+}
+
+export interface ContractBundleMetadata {
+  entry: string
+  files: Array<{ path: string; fingerprint: ContentFingerprint }>
+}
+
+export interface SourceMetadata {
+  fingerprint?: ContentFingerprint
+  dialect?: string
+  bundle?: ContractBundleMetadata
+}
+
+export interface CoverageWarning {
+  code: string
+  side: 'old' | 'new'
+  location: string
+  message: string
+  source?: ContractSourceLocation
+}
+
+export interface AnalysisCoverage {
+  status: 'complete' | 'partial'
+  warnings: CoverageWarning[]
+  truncated: boolean
 }
 
 export interface AnalysisSummary {
@@ -32,6 +74,55 @@ export interface AnalysisRecord {
   summary: AnalysisSummary
   changes: ChangeRecord[]
   engineVersion?: string
+  source?: {
+    old: SourceMetadata
+    new: SourceMetadata
+  }
+  policy?: { id: string; fingerprint?: ContentFingerprint }
+  coverage?: AnalysisCoverage
+  consumerImpact?: ConsumerImpactReport
+  /** Compact history projection; independent of the static score and compatible flag. */
+  consumerGate?: ConsumerImpactReport['gate']
+  consumerSummary?: ConsumerImpactReport['summary']
+  /** Invalid or unsupported saved evidence is never displayed as a pass. */
+  consumerImpactError?: string
+}
+
+export interface EvidenceValidation {
+  status: 'valid' | 'invalid' | 'unknown'
+  issues: Array<{ code: string; path: string; message: string }>
+  truncated: boolean
+}
+
+export interface ConsumerCheck {
+  id: string
+  interactionId: string
+  name: string
+  kind: 'request' | 'response'
+  method: string
+  path: string
+  status: 'pass' | 'regression' | 'invalid-baseline' | 'inconclusive'
+  baseline: EvidenceValidation
+  candidate: EvidenceValidation
+  relatedChangeIds: string[]
+  note: string
+}
+
+export interface ConsumerImpactReport {
+  schemaVersion: 1
+  evidenceKind: 'supplied-examples'
+  fingerprint: ContentFingerprint
+  summary: { consumers: number; interactions: number; checks: number; passed: number; regressions: number; invalidBaselines: number; inconclusive: number }
+  gate: 'pass' | 'review' | 'blocked'
+  consumers: Array<{ id: string; name: string; owner?: string; criticality: 'critical' | 'standard'; checks: ConsumerCheck[] }>
+  unmappedChangeIds: string[]
+  migrationTasks: Array<{ id: string; consumerId: string; owner?: string; priority: 'high' | 'normal'; checkIds: string[]; changeIds: string[]; action: string; verification: string }>
+  limitations: string[]
+}
+
+export interface ContentFingerprint {
+  algorithm: 'sha256'
+  value: string
 }
 
 export interface RuleDefinition {
@@ -109,6 +200,9 @@ export interface AiTokenUsage {
 }
 
 export interface AiReviewReport {
+  id?: string
+  language?: 'zh-CN' | 'en'
+  focus?: string
   schemaVersion: '1.0'
   analysisId: string
   provider: string
@@ -123,8 +217,14 @@ export interface AiReviewReport {
   testSuggestions: AiTestSuggestion[]
   caveats: string[]
   usage?: AiTokenUsage
+  coverage?: {
+    totalFindings: number
+    includedFindings: number
+    omittedFindings: number
+    includedChangeIds: string[]
+  }
 }
 
-export type ViewName = 'analyze' | 'history'
+export type ViewName = 'analyze' | 'history' | 'agent' | 'callers'
 export type SeverityFilter = 'all' | Severity
 export type ExportFormat = 'json' | 'markdown' | 'html'

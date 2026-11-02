@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [deliveryId, status, attemptCount, target]
+properties:
+  deliveryId:
+    type: integer
+  status:
+    type: string
+    enum: [queued, delivered, permanently_failed]
+  attemptCount:
+    type: integer
+    minimum: 0
+  target:
+    $ref: ./delivery-target.yaml

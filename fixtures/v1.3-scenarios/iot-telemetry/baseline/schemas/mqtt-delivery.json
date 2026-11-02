@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": [
+    "protocol",
+    "topic"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "mqtt"
+      ]
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

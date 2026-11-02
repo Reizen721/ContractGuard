@@ -1,0 +1,19 @@
+type: object
+additionalProperties: false
+required: [items]
+properties:
+  customerId:
+    type: string
+    minLength: 1
+  items:
+    type: array
+    minItems: 1
+    maxItems: 100
+    items:
+      $ref: ./line-item.yaml
+  note:
+    type: string
+    maxLength: 200
+  clientReference:
+    type: string
+    maxLength: 64

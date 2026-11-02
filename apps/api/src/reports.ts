@@ -1,4 +1,5 @@
 import type { StoredAnalysis } from './types.js';
+import { consumerReportLines } from '@contractguard/core';
 
 type Change = StoredAnalysis['changes'][number];
 
@@ -22,6 +23,7 @@ function renderMarkdown(analysis: StoredAnalysis): string {
     ...(analysis.policy ? [`- Policy: \`${escapeCode(analysis.policy.id)}\` · SHA-256 \`${analysis.policy.fingerprint.value}\``] : []),
     ...(analysis.source.old.fingerprint ? [`- Baseline SHA-256: \`${analysis.source.old.fingerprint.value}\``] : []),
     ...(analysis.source.new.fingerprint ? [`- Candidate SHA-256: \`${analysis.source.new.fingerprint.value}\``] : []),
+    ...sourceAudit(analysis).map((line) => `- ${escapeMarkdown(line)}`),
     `- Compatibility score: **${analysis.score}/100**`,
     `- Backward compatible: **${analysis.compatible ? 'Yes' : 'No'}**`,
     '',
@@ -30,6 +32,12 @@ function renderMarkdown(analysis: StoredAnalysis): string {
     '| Breaking | Potential | Non-breaking | Info | Total |',
     '| ---: | ---: | ---: | ---: | ---: |',
     `| ${analysis.summary.breaking} | ${analysis.summary.potentiallyBreaking} | ${analysis.summary.nonBreaking} | ${analysis.summary.info} | ${analysis.summary.total} |`,
+    '',
+    '## Analysis coverage',
+    '',
+    ...coverageText(analysis).map(escapeMarkdown),
+    '', '## Consumer evidence and migration tasks', '',
+    ...consumerReportLines(analysis.consumerImpact).map(escapeMarkdown),
     '',
     '## Changes',
     '',
@@ -47,6 +55,9 @@ function renderMarkdown(analysis: StoredAnalysis): string {
       );
       appendValue(lines, 'Before', change.before);
       appendValue(lines, 'After', change.after);
+      for (const [side, source] of Object.entries(change.sourceLocations ?? {})) {
+        if (source) lines.push(`- ${side} source: ${escapeMarkdown(source.file)}${source.pointer.startsWith('#') ? '' : '#'}${escapeMarkdown(source.pointer)}`);
+      }
       if (change.recommendation) lines.push(`- Recommendation: ${escapeMarkdown(change.recommendation)}`);
       lines.push('');
     }
@@ -81,6 +92,7 @@ function renderHtml(analysis: StoredAnalysis): string {
     ...(analysis.policy ? [`Policy ${analysis.policy.id} · ${analysis.policy.fingerprint.value}`] : []),
     ...(analysis.source.old.fingerprint ? [`Baseline SHA-256 ${analysis.source.old.fingerprint.value}`] : []),
     ...(analysis.source.new.fingerprint ? [`Candidate SHA-256 ${analysis.source.new.fingerprint.value}`] : []),
+    ...sourceAudit(analysis),
   ].map((item) => `<div><code>${html(item)}</code></div>`).join('');
 
   return `<!doctype html>
@@ -97,7 +109,9 @@ function renderHtml(analysis: StoredAnalysis): string {
 <body><main class="page">
   <section class="header"><div class="eyebrow">ContractGuard compatibility report</div><h1>${html(analysis.baselineName)} → ${html(analysis.candidateName)}</h1><div class="meta">${html(analysis.createdAt)} · ${html(analysis.id)}</div><div class="score"><div class="number">${analysis.score}</div><div><strong>/ 100</strong><br>${analysis.compatible ? 'No covered breaking changes detected' : 'Breaking changes detected'}</div></div><div class="audit">${audit}</div></section>
   <section class="metrics"><div class="metric"><strong>${analysis.summary.breaking}</strong>Breaking</div><div class="metric"><strong>${analysis.summary.potentiallyBreaking}</strong>Potential</div><div class="metric"><strong>${analysis.summary.nonBreaking}</strong>Non-breaking</div><div class="metric"><strong>${analysis.summary.info}</strong>Info</div></section>
+  <section class="header"><h2>Analysis coverage</h2>${coverageText(analysis).map((line) => `<p>${html(line)}</p>`).join('')}</section>
   <section class="card"><table><thead><tr><th>Severity</th><th>Rule</th><th>Location</th><th>Finding</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No contract changes were detected.</td></tr>'}</tbody></table></section>
+  <section class="header"><h2>Consumer evidence and migration tasks</h2>${consumerReportLines(analysis.consumerImpact).map((line) => `<p>${html(line)}</p>`).join('')}</section>
   <p class="note">This deterministic report covers the configured static rules and is not a formal proof of compatibility. Runtime behavior and external references still require testing.</p>
 </main></body></html>`;
 }
@@ -111,6 +125,9 @@ function severityClass(change: Change): string {
 
 function evidenceHtml(change: Change): string {
   const entries: string[] = [];
+  for (const [side, source] of Object.entries(change.sourceLocations ?? {})) {
+    if (source) entries.push(`<div><dt>${html(side)} source</dt><dd><code>${html(source.file)}${source.pointer.startsWith('#') ? '' : '#'}${html(source.pointer)}</code></dd></div>`);
+  }
   if (change.before !== undefined) entries.push(`<div><dt>Before</dt><dd><pre>${html(pretty(change.before))}</pre></dd></div>`);
   if (change.after !== undefined) entries.push(`<div><dt>After</dt><dd><pre>${html(pretty(change.after))}</pre></dd></div>`);
   return entries.length ? `<details class="evidence"><summary>Before / after evidence</summary><dl>${entries.join('')}</dl></details>` : '';
@@ -123,6 +140,25 @@ function pretty(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function coverageText(analysis: StoredAnalysis): string[] {
+  if (!analysis.coverage) return ['Status: not recorded by this older engine. Do not infer complete coverage.'];
+  return [
+    `Status: ${analysis.coverage.status}. Complete only means no known coverage warnings in the implemented profile; it is not proof of runtime safety.`,
+    ...analysis.coverage.warnings.map((warning) => `${warning.side} ${warning.code} at ${warning.source ? `${warning.source.file}${warning.source.pointer.startsWith('#') ? '' : '#'}${warning.source.pointer}` : warning.location}: ${warning.message}`),
+    ...(analysis.coverage.truncated ? ['Warning list truncated; not all limitations are displayed.'] : []),
+  ];
+}
+
+function sourceAudit(analysis: StoredAnalysis): string[] {
+  return (['old', 'new'] as const).flatMap((side) => {
+    const source = analysis.source[side];
+    return [
+      ...(source.dialect ? [`${side} dialect: ${source.dialect}`] : []),
+      ...(source.bundle ? [`${side} entry: ${source.bundle.entry}`, ...source.bundle.files.map((file) => `${side} dependency: ${file.path} · SHA-256 ${file.fingerprint.value}`)] : []),
+    ];
+  });
 }
 
 function html(value: unknown): string {

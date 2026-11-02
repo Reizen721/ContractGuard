@@ -7,11 +7,13 @@ import type {
   OpenApiInput,
   Severity,
 } from "./types.js";
-import { fingerprintOpenApiInput } from "./fingerprint.js";
-import { parseOpenApi, resolveNode } from "./parser.js";
+import { prepareContract, locateContractSource } from "./bundle.js";
+import { inspectCoverage } from "./coverage.js";
+import { dialectFor, isUnanalysedSchema, normalizedSchemaTypes } from "./dialect.js";
+import { pathItemReferenceConflicts, resolveNode, resolvePathItemNode, resolveSchemaNode } from "./parser.js";
 import { resolveRulePolicy, type ResolvedRulePolicy } from "./policy.js";
 
-export const ENGINE_VERSION = "1.1.0";
+export const ENGINE_VERSION = "2.0.0";
 
 const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
 type Direction = "request" | "response";
@@ -33,6 +35,11 @@ function isRecord(value: unknown): value is Node {
 
 function asRecord(document: OpenApiDocument, value: unknown): Node | undefined {
   const resolved = resolveNode(document, value);
+  return isRecord(resolved) ? resolved : undefined;
+}
+
+function asSchemaRecord(document: OpenApiDocument, value: unknown): Node | undefined {
+  const resolved = resolveSchemaNode(document, value);
   return isRecord(resolved) ? resolved : undefined;
 }
 
@@ -67,7 +74,9 @@ function add(ctx: CompareContext, change: DraftChange): void {
   const resolved = configured?.severity === undefined ? change : { ...change, severity: configured.severity };
   if (resolved.severity === "info" && !ctx.options.includeInfo) return;
   if (resolved.severity === "non-breaking" && !ctx.options.includeNonBreaking) return;
-  ctx.changes.push(resolved);
+  const oldSource = locateContractSource(ctx.oldDocument, change.location);
+  const newSource = locateContractSource(ctx.newDocument, change.location);
+  ctx.changes.push({ ...resolved, ...(oldSource || newSource ? { sourceLocations: { ...(oldSource ? { old: oldSource } : {}), ...(newSource ? { new: newSource } : {}) } } : {}) });
 }
 
 function change(
@@ -83,20 +92,6 @@ function change(
 
 function operationLocation(path: string, method: string): string {
   return `paths[${JSON.stringify(path)}].${method}`;
-}
-
-function schemaTypeSet(schema: Node): Set<string> {
-  const types = new Set<string>();
-  if (typeof schema.type === "string") types.add(schema.type);
-  if (Array.isArray(schema.type)) {
-    for (const type of schema.type) if (typeof type === "string") types.add(type);
-  }
-  if (schema.nullable === true) types.add("null");
-  if (types.size === 0) {
-    if (isRecord(schema.properties) || Array.isArray(schema.required)) types.add("object");
-    else if (schema.items !== undefined) types.add("array");
-  }
-  return types;
 }
 
 function isSubset<T>(left: Set<T>, right: Set<T>): boolean {
@@ -132,8 +127,8 @@ function compareTypes(
   direction: Direction,
   location: string,
 ): void {
-  const oldTypes = schemaTypeSet(oldSchema);
-  const newTypes = schemaTypeSet(newSchema);
+  const oldTypes = normalizedSchemaTypes(ctx.oldDocument, oldSchema);
+  const newTypes = normalizedSchemaTypes(ctx.newDocument, newSchema);
   if (equal([...oldTypes].sort(), [...newTypes].sort())) return;
 
   const compatible = direction === "request"
@@ -270,8 +265,69 @@ function compareUnsupportedSchemaKeywords(
   }
 }
 
-const LOWER_BOUNDS = ["minimum", "exclusiveMinimum", "minLength", "minItems", "minProperties"] as const;
-const UPPER_BOUNDS = ["maximum", "exclusiveMaximum", "maxLength", "maxItems", "maxProperties"] as const;
+const LOWER_BOUNDS = ["minLength", "minItems", "minProperties"] as const;
+const UPPER_BOUNDS = ["maxLength", "maxItems", "maxProperties"] as const;
+
+interface NumericBound {
+  value: number;
+  exclusive: boolean;
+}
+
+/** 3.0 has a boolean exclusive flag; 3.1 allows two independent numeric bounds. */
+function numericBound(document: OpenApiDocument, schema: Node, lower: boolean): NumericBound | undefined {
+  const inclusiveKey = lower ? "minimum" : "maximum";
+  const exclusiveKey = lower ? "exclusiveMinimum" : "exclusiveMaximum";
+  const inclusive = schema[inclusiveKey];
+  const exclusive = schema[exclusiveKey];
+  const inclusiveBound = typeof inclusive === "number" && Number.isFinite(inclusive)
+    ? { value: inclusive, exclusive: false } : undefined;
+  if (document.openapi.startsWith("3.0.")) {
+    return inclusiveBound === undefined ? undefined : { ...inclusiveBound, exclusive: exclusive === true };
+  }
+  const exclusiveBound = typeof exclusive === "number" && Number.isFinite(exclusive)
+    ? { value: exclusive, exclusive: true } : undefined;
+  if (inclusiveBound === undefined) return exclusiveBound;
+  if (exclusiveBound === undefined) return inclusiveBound;
+  const exclusiveIsStronger = lower ? exclusiveBound.value >= inclusiveBound.value : exclusiveBound.value <= inclusiveBound.value;
+  return exclusiveIsStronger ? exclusiveBound : inclusiveBound;
+}
+
+function compareNumericBound(
+  ctx: CompareContext,
+  oldSchema: Node,
+  newSchema: Node,
+  direction: Direction,
+  location: string,
+  lower: boolean,
+): void {
+  const before = numericBound(ctx.oldDocument, oldSchema, lower);
+  const after = numericBound(ctx.newDocument, newSchema, lower);
+  const discrete = oldSchema.type === "integer" && newSchema.type === "integer";
+  const effective = (bound: NumericBound | undefined): NumericBound | undefined => bound === undefined || !discrete ? bound : {
+    value: lower ? bound.exclusive ? Math.floor(bound.value) + 1 : Math.ceil(bound.value)
+      : bound.exclusive ? Math.ceil(bound.value) - 1 : Math.floor(bound.value),
+    exclusive: false,
+  };
+  const oldEffective = effective(before);
+  const newEffective = effective(after);
+  if (equal(oldEffective, newEffective)) return;
+  const tightened = oldEffective === undefined ? true : newEffective === undefined ? false
+    : oldEffective.value === newEffective.value ? newEffective.exclusive && !oldEffective.exclusive
+      : lower ? newEffective.value > oldEffective.value : newEffective.value < oldEffective.value;
+  const incompatible = direction === "request" ? tightened : !tightened;
+  const inclusiveKey = lower ? "minimum" : "maximum";
+  const key = before?.value === after?.value ? (lower ? "exclusiveMinimum" : "exclusiveMaximum") : inclusiveKey;
+  add(ctx, change(
+    incompatible ? "SCHEMA_CONSTRAINT_TIGHTENED" : "SCHEMA_CONSTRAINT_RELAXED",
+    incompatible ? (direction === "request" ? "breaking" : "potentially-breaking") : "non-breaking",
+    "schema",
+    `${location}.${key}`,
+    incompatible
+      ? `The numeric ${lower ? "lower" : "upper"} bound ${direction === "request" ? "rejects previously valid input" : "permits output outside the old contract"}.`
+      : `The numeric ${lower ? "lower" : "upper"} bound changed without reducing ${direction} backward compatibility.`,
+    { before, after, recommendation: incompatible ? "Preserve both the old boundary value and whether that endpoint is included, or version the operation." : undefined },
+  ));
+}
 
 function compareBound(
   ctx: CompareContext,
@@ -313,6 +369,8 @@ function compareConstraints(
   direction: Direction,
   location: string,
 ): void {
+  compareNumericBound(ctx, oldSchema, newSchema, direction, location, true);
+  compareNumericBound(ctx, oldSchema, newSchema, direction, location, false);
   for (const key of LOWER_BOUNDS) compareBound(ctx, oldSchema, newSchema, direction, location, key, true);
   for (const key of UPPER_BOUNDS) compareBound(ctx, oldSchema, newSchema, direction, location, key, false);
 
@@ -353,8 +411,8 @@ function requiredSet(schema: Node): Set<string> {
 }
 
 function properties(document: OpenApiDocument, schema: Node): Record<string, unknown> {
-  const resolved = asRecord(document, schema.properties);
-  return resolved ?? {};
+  // A property map may legally contain a property named "$ref"; it is not a Reference Object.
+  return isRecord(schema.properties) ? schema.properties : {};
 }
 
 function propertyApplies(
@@ -362,9 +420,86 @@ function propertyApplies(
   value: unknown,
   direction: Direction,
 ): boolean {
-  const schema = asRecord(document, value);
+  const schema = asSchemaRecord(document, value);
   if (schema === undefined) return true;
   return direction === "request" ? schema.readOnly !== true : schema.writeOnly !== true;
+}
+
+const SCHEMA_ANNOTATIONS = new Set(["title", "description", "example", "examples", "default", "deprecated", "readOnly", "writeOnly", "xml", "externalDocs", "$comment"]);
+const UNKNOWN_SIGNATURE = "\u0000unproven-schema-signature";
+const COMPLEX_OBJECT_CONSTRAINTS = ["patternProperties", "propertyNames", "unevaluatedProperties", "enum", "const", "oneOf", "anyOf", "allOf", "not", "if", "then", "else", "dependentSchemas", "dependentRequired", "minProperties", "maxProperties"];
+
+function isUniversalSchema(document: OpenApiDocument, value: unknown): boolean {
+  // Also used for the legal boolean-valued additionalProperties keyword in 3.0.
+  if (typeof value === 'boolean') return value;
+  if (isUnanalysedSchema(document, value)) return false;
+  const resolved = resolveSchemaNode(document, value);
+  return resolved === true || (isRecord(resolved) && Object.keys(resolved).every((key) => SCHEMA_ANNOTATIONS.has(key)));
+}
+
+/** Used for equality, not for proving containment between different schemas. */
+function schemaSignature(document: OpenApiDocument, value: unknown, visited = new Set<string>(), budget = { remaining: 2_000, complete: true }): string {
+  if (isUnanalysedSchema(document, value)) { budget.complete = false; return UNKNOWN_SIGNATURE; }
+  if (--budget.remaining < 0) {
+    budget.complete = false;
+    return UNKNOWN_SIGNATURE;
+  }
+  const reference = schemaRef(value);
+  if (reference !== undefined && visited.has(reference)) return stable({ $ref: reference });
+  const nextVisited = new Set(visited);
+  if (reference !== undefined) nextVisited.add(reference);
+  const schema = resolveSchemaNode(document, value);
+  if (!isRecord(schema)) return stable(schema);
+  const normalized: Node = {};
+  for (const [key, child] of Object.entries(schema)) {
+    if (key === 'nullable') continue;
+    if (key === 'type') { normalized.type = [...normalizedSchemaTypes(document, schema)].sort(); continue; }
+    // Documentation-only annotations do not change an instance set. Directional
+    // readOnly/writeOnly flags are deliberately retained for nested properties.
+    if (SCHEMA_ANNOTATIONS.has(key) && key !== "readOnly" && key !== "writeOnly") continue;
+    if (["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"].includes(key) && isRecord(child)) {
+      normalized[key] = Object.fromEntries(Object.entries(child).map(([name, item]) => [name, schemaSignature(document, item, nextVisited, budget)]));
+    } else if (["oneOf", "anyOf", "allOf", "prefixItems"].includes(key) && Array.isArray(child)) {
+      const items = child.map((item) => schemaSignature(document, item, nextVisited, budget));
+      normalized[key] = key === "prefixItems" ? items : key === "oneOf" ? items.sort() : [...new Set(items)].sort();
+    } else if (["items", "additionalProperties", "contains", "not", "if", "then", "else", "unevaluatedProperties", "unevaluatedItems", "propertyNames", "contentSchema"].includes(key)) {
+      normalized[key] = schemaSignature(document, child, nextVisited, budget);
+    } else if (["required", "enum", "type"].includes(key) && Array.isArray(child)) {
+      normalized[key] = [...new Set(child.map(stable))].sort();
+    } else {
+      normalized[key] = child;
+    }
+  }
+  return budget.complete ? stable(normalized) : UNKNOWN_SIGNATURE;
+}
+
+function schemasEqual(oldDocument: OpenApiDocument, oldValue: unknown, newDocument: OpenApiDocument, newValue: unknown): boolean {
+  const oldSignature = schemaSignature(oldDocument, oldValue);
+  return oldSignature !== UNKNOWN_SIGNATURE && oldSignature === schemaSignature(newDocument, newValue);
+}
+
+function addedOptionalRequestPropertySeverity(ctx: CompareContext, oldSchema: Node, newProperty: unknown): Severity {
+  if (isUnanalysedSchema(ctx.newDocument, newProperty)) return "potentially-breaking";
+  if (oldSchema.additionalProperties === false || isUniversalSchema(ctx.newDocument, newProperty)) return "non-breaking";
+  const implicitSchema = oldSchema.additionalProperties ?? true;
+  if (schemasEqual(ctx.oldDocument, implicitSchema, ctx.newDocument, newProperty)) return "non-breaking";
+  if (COMPLEX_OBJECT_CONSTRAINTS.some((key) => oldSchema[key] !== undefined)) return "potentially-breaking";
+  const next = resolveSchemaNode(ctx.newDocument, newProperty);
+  // This narrow proof covers the common open-object -> typed-property case.
+  // Other interactions remain explicitly uncertain, rather than called safe.
+  if (isUniversalSchema(ctx.oldDocument, implicitSchema)
+    && (next === false || (isRecord(next) && (next.type !== undefined || next.enum !== undefined)))) return "breaking";
+  return "potentially-breaking";
+}
+
+function removedRequestPropertySeverity(ctx: CompareContext, newSchema: Node, oldProperty: unknown): Severity {
+  if (isUnanalysedSchema(ctx.oldDocument, oldProperty)) return "potentially-breaking";
+  if (newSchema.additionalProperties === false) return "breaking";
+  if (COMPLEX_OBJECT_CONSTRAINTS.some((key) => newSchema[key] !== undefined)) return "potentially-breaking";
+  const implicitSchema = newSchema.additionalProperties ?? true;
+  if (isUniversalSchema(ctx.newDocument, implicitSchema)
+    || schemasEqual(ctx.oldDocument, oldProperty, ctx.newDocument, implicitSchema)) return "non-breaking";
+  return "potentially-breaking";
 }
 
 function compareObjectSchema(
@@ -417,9 +552,12 @@ function compareObjectSchema(
       continue;
     }
     if (inOld && !inNew) {
-      add(ctx, change("SCHEMA_PROPERTY_REMOVED", "breaking", "schema", childLocation,
-        direction === "request" ? "A previously documented request property was removed." : "A response property used by clients was removed.",
-        { before: oldProperties[name], recommendation: "Retain the property through a deprecation window or release a new API version." }));
+      const severity = direction === "response" || own(newProperties, name) ? "breaking" : removedRequestPropertySeverity(ctx, newSchema, oldProperties[name]);
+      add(ctx, change("SCHEMA_PROPERTY_REMOVED", severity, "schema", childLocation,
+        direction === "response" ? "A response property used by clients was removed."
+          : severity === "non-breaking" ? "A request property definition was removed, but its former values remain accepted by additionalProperties."
+            : "A request property definition was removed; its former values are rejected or cannot be proven accepted by additionalProperties.",
+        { before: oldProperties[name], after: newSchema.additionalProperties ?? true, recommendation: severity === "non-breaking" ? undefined : "Retain acceptance of the former property values through a deprecation window or version the operation." }));
       continue;
     }
     if (!inOld && inNew) {
@@ -429,9 +567,12 @@ function compareObjectSchema(
           incompatible ? "A required request property was added." : "A new response property is guaranteed to be present.",
           { after: newProperties[name], recommendation: incompatible ? "Make the new property optional or version the operation." : undefined }));
       } else {
-        add(ctx, change("SCHEMA_PROPERTY_ADDED", "non-breaking", "schema", childLocation,
-          direction === "request" ? "An optional request property was added." : "An optional response property was added.",
-          { after: newProperties[name] }));
+        const severity = direction === "request" ? addedOptionalRequestPropertySeverity(ctx, oldSchema, newProperties[name]) : "non-breaking";
+        add(ctx, change("SCHEMA_PROPERTY_ADDED", severity, "schema", childLocation,
+          direction === "response" ? "An optional response property was added."
+            : severity === "non-breaking" ? "An optional request property was added without restricting previously accepted values."
+              : "An optional request property now constrains values formerly governed by additionalProperties; old input may be rejected.",
+          { before: direction === "request" ? oldSchema.additionalProperties ?? true : undefined, after: newProperties[name], recommendation: severity === "non-breaking" ? undefined : "Check values previously sent under this name; optional does not imply unconstrained. Keep accepting those values or version the operation." }));
       }
       continue;
     }
@@ -462,8 +603,8 @@ function compareBooleanSchema(
   direction: Direction,
   location: string,
 ): boolean {
-  const resolvedOld = resolveNode(ctx.oldDocument, oldValue);
-  const resolvedNew = resolveNode(ctx.newDocument, newValue);
+  const resolvedOld = resolveSchemaNode(ctx.oldDocument, oldValue);
+  const resolvedNew = resolveSchemaNode(ctx.newDocument, newValue);
   const oldBoolean = typeof resolvedOld === "boolean";
   const newBoolean = typeof resolvedNew === "boolean";
   if (!oldBoolean && !newBoolean) return false;
@@ -500,6 +641,18 @@ function compareSchema(
   visited = new Set<string>(),
 ): void {
   if (oldValue === undefined && newValue === undefined) return;
+  if (isUnanalysedSchema(ctx.oldDocument, oldValue) || isUnanalysedSchema(ctx.newDocument, newValue)) {
+    const before = resolveSchemaNode(ctx.oldDocument, oldValue);
+    const after = resolveSchemaNode(ctx.newDocument, newValue);
+    const composition = ['oneOf', 'anyOf', 'allOf'].find((key) => (isRecord(before) && own(before, key)) || (isRecord(after) && own(after, key)));
+    if (composition) add(ctx, change('SCHEMA_COMPOSITION_CHANGED', 'potentially-breaking', 'schema', `${location}.${composition}`,
+      'Composed-schema comparison was withheld because its dialect, reference conjunction, or inspection budget is not fully supported.',
+      { before, after, recommendation: 'Review the coverage warnings and test payloads against both contracts; no composition safety proof was established.' }));
+    else if (!equal(before, after)) add(ctx, change('SCHEMA_UNSUPPORTED_KEYWORD_CHANGED', 'potentially-breaking', 'schema', location,
+      'Schema changed in a dialect or resource scope that this profile cannot interpret; precise compatibility comparison was withheld.',
+      { before, after, recommendation: 'Review the coverage warnings and validate both contracts with a validator for the declared dialect.' }));
+    return;
+  }
   if (oldValue === undefined || newValue === undefined) {
     const compatible = direction === "request"
       ? newValue === undefined
@@ -528,8 +681,8 @@ function compareSchema(
   const nextVisited = new Set(visited);
   if (oldReference !== undefined || newReference !== undefined) nextVisited.add(pair);
 
-  const oldSchema = asRecord(ctx.oldDocument, oldValue);
-  const newSchema = asRecord(ctx.newDocument, newValue);
+  const oldSchema = asSchemaRecord(ctx.oldDocument, oldValue);
+  const newSchema = asSchemaRecord(ctx.newDocument, newValue);
   if (oldSchema === undefined || newSchema === undefined) return;
 
   compareTypes(ctx, oldSchema, newSchema, direction, location);
@@ -544,24 +697,22 @@ function compareSchema(
     if (own(oldSchema, keyword) || own(newSchema, keyword)) {
       const oldItems = asArray(oldSchema[keyword]);
       const newItems = asArray(newSchema[keyword]);
-      const oldItemSet = oldItems.map((item) => stable(resolveNode(ctx.oldDocument, item))).sort();
-      const newItemSet = newItems.map((item) => stable(resolveNode(ctx.newDocument, item))).sort();
-      if (equal(oldItemSet, newItemSet)) continue;
-      if (oldItems.length !== newItems.length) {
-        const inputTightened = keyword === "allOf" ? newItems.length > oldItems.length : newItems.length < oldItems.length;
-        const incompatible = direction === "request" ? inputTightened : !inputTightened;
-        add(ctx, change(
-          incompatible ? "SCHEMA_CONSTRAINT_TIGHTENED" : "SCHEMA_CONSTRAINT_RELAXED",
-          incompatible ? "potentially-breaking" : "non-breaking",
-          "schema",
-          `${location}.${keyword}`,
-          `${keyword} branch count changed from ${oldItems.length} to ${newItems.length}.`,
-          { before: oldItems.length, after: newItems.length, recommendation: incompatible ? "Review composed-schema variants and test real consumer payloads." : undefined },
-        ));
-      }
-      for (let index = 0; index < Math.min(oldItems.length, newItems.length); index += 1) {
-        compareSchema(ctx, oldItems[index], newItems[index], direction, `${location}.${keyword}[${index}]`, nextVisited);
-      }
+      const oldBudget = { remaining: 2_000, complete: true };
+      const newBudget = { remaining: 2_000, complete: true };
+      const oldSignatures = oldItems.map((item) => schemaSignature(ctx.oldDocument, item, new Set(), oldBudget));
+      const newSignatures = newItems.map((item) => schemaSignature(ctx.newDocument, item, new Set(), newBudget));
+      // oneOf duplicates are meaningful: matching the same branch twice fails.
+      const oldItemSet = (keyword === "oneOf" ? oldSignatures : [...new Set(oldSignatures)]).sort();
+      const newItemSet = (keyword === "oneOf" ? newSignatures : [...new Set(newSignatures)]).sort();
+      if (!oldItemSet.includes(UNKNOWN_SIGNATURE) && !newItemSet.includes(UNKNOWN_SIGNATURE) && equal(oldItemSet, newItemSet)) continue;
+      add(ctx, change(
+        "SCHEMA_COMPOSITION_CHANGED",
+        "potentially-breaking",
+        "schema",
+        `${location}.${keyword}`,
+        `${keyword} changed or exceeded the bounded comparison budget; ${direction} instance-set containment could not be proven. Branch count and array position are not a compatibility proof.`,
+        { before: oldItems, after: newItems, recommendation: "Review all composed-schema branches and test payloads against both contracts. In particular, oneOf requires exactly one matching branch." },
+      ));
     }
   }
 }
@@ -593,6 +744,31 @@ function parameterSchema(parameter: Node): unknown {
   if (mediaType === undefined) return undefined;
   const media = content[mediaType];
   return isRecord(media) ? media.schema : undefined;
+}
+
+function serializationSettings(parameter: Node, placement: string): Node {
+  if (isRecord(parameter.content)) return { mode: "content", mediaTypes: Object.keys(parameter.content).sort() };
+  const style = typeof parameter.style === "string" ? parameter.style : placement === "query" || placement === "cookie" ? "form" : "simple";
+  return {
+    mode: "schema",
+    style,
+    explode: typeof parameter.explode === "boolean" ? parameter.explode : style === "form",
+    ...(placement === "query" ? { allowReserved: parameter.allowReserved === true } : {}),
+  };
+}
+
+function compareSerialization(ctx: CompareContext, oldParameter: Node, newParameter: Node, placement: string, location: string, header = false): void {
+  const before = serializationSettings(oldParameter, placement);
+  const after = serializationSettings(newParameter, placement);
+  if (equal(before, after)) return;
+  add(ctx, change(
+    header ? "RESPONSE_HEADER_SERIALIZATION_CHANGED" : "PARAMETER_SERIALIZATION_CHANGED",
+    "potentially-breaking",
+    header ? "response" : "parameter",
+    `${location}.serialization`,
+    `${header ? "Response header" : "Request parameter"} serialization changed; unchanged values may now require a different wire representation.`,
+    { before, after, recommendation: "Keep accepting/producing the previous wire format during migration and test existing SDK requests and parsers (for example, ids=a&ids=b versus ids=a,b)." },
+  ));
 }
 
 function compareParameters(
@@ -643,6 +819,7 @@ function compareParameters(
         { before: oldRequired, after: newRequired, recommendation: newRequired ? "Keep the parameter optional for existing callers." : undefined },
       ));
     }
+    compareSerialization(ctx, oldEntry.parameter, newEntry.parameter, oldEntry.in, location);
     compareSchema(ctx, parameterSchema(oldEntry.parameter), parameterSchema(newEntry.parameter), "request", `${location}.schema`);
   }
 }
@@ -717,6 +894,38 @@ function isSuccessStatus(status: string): boolean {
   return /^2(?:\d\d|XX)$/i.test(status);
 }
 
+function responseHeaders(document: OpenApiDocument, response: Node | undefined): Map<string, { name: string; header: Node }> {
+  const result = new Map<string, { name: string; header: Node }>();
+  const headers = response === undefined ? undefined : asRecord(document, response.headers);
+  for (const [name, value] of Object.entries(headers ?? {})) {
+    // OpenAPI explicitly ignores Content-Type here; it is described by content.
+    if (name.toLowerCase() === "content-type") continue;
+    const header = asRecord(document, value);
+    if (header !== undefined) result.set(name.toLowerCase(), { name, header });
+  }
+  return result;
+}
+
+function compareResponseHeaders(ctx: CompareContext, oldResponse: Node | undefined, newResponse: Node | undefined, base: string): void {
+  const oldHeaders = responseHeaders(ctx.oldDocument, oldResponse);
+  const newHeaders = responseHeaders(ctx.newDocument, newResponse);
+  for (const key of [...new Set([...oldHeaders.keys(), ...newHeaders.keys()])].sort()) {
+    const before = oldHeaders.get(key);
+    const after = newHeaders.get(key);
+    const location = `${base}.headers[${JSON.stringify(before?.name ?? after?.name)}]`;
+    if (before !== undefined && after === undefined) {
+      add(ctx, change("RESPONSE_HEADER_REMOVED", "potentially-breaking", "response", location,
+        `Response header ${before.name} was removed; clients may depend on its value for pagination, retries, or metadata.`,
+        { before: before.header, recommendation: "Keep producing the header until consumers migrate, or verify no client depends on it." }));
+    } else if (before === undefined && after !== undefined) {
+      add(ctx, change("RESPONSE_HEADER_ADDED", "non-breaking", "response", location, `Response header ${after.name} was added.`, { after: after.header }));
+    } else if (before !== undefined && after !== undefined) {
+      compareSerialization(ctx, before.header, after.header, "header", location, true);
+      compareSchema(ctx, parameterSchema(before.header), parameterSchema(after.header), "response", `${location}.schema`);
+    }
+  }
+}
+
 function compareResponses(ctx: CompareContext, oldOperation: Node, newOperation: Node, base: string): void {
   const oldResponses = responsesNode(ctx.oldDocument, oldOperation);
   const newResponses = responsesNode(ctx.newDocument, newOperation);
@@ -739,6 +948,7 @@ function compareResponses(ctx: CompareContext, oldOperation: Node, newOperation:
     }
     const oldResponse = asRecord(ctx.oldDocument, oldResponses[status]);
     const newResponse = asRecord(ctx.newDocument, newResponses[status]);
+    compareResponseHeaders(ctx, oldResponse, newResponse, location);
     const oldContent = contentNode(ctx.oldDocument, oldResponse);
     const newContent = contentNode(ctx.newDocument, newResponse);
     for (const mediaType of [...new Set([...Object.keys(oldContent), ...Object.keys(newContent)])].sort()) {
@@ -995,9 +1205,13 @@ function comparePaths(ctx: CompareContext): void {
       add(ctx, change("PATH_ADDED", "non-breaking", "path", location, `Path ${path} was added.`));
       continue;
     }
-    const oldPathItem = asRecord(ctx.oldDocument, oldPaths[path]);
-    const newPathItem = asRecord(ctx.newDocument, newPaths[path]);
-    if (oldPathItem === undefined || newPathItem === undefined) continue;
+    const oldPathItem = resolvePathItemNode(ctx.oldDocument, oldPaths[path]);
+    const newPathItem = resolvePathItemNode(ctx.newDocument, newPaths[path]);
+    if (!isRecord(oldPathItem) || !isRecord(newPathItem)) continue;
+    // The specification does not define which overlapping Path Item field wins.
+    // Keep its coverage warning rather than inventing a precise operation diff.
+    if (pathItemReferenceConflicts(ctx.oldDocument, oldPaths[path]).length
+      || pathItemReferenceConflicts(ctx.newDocument, newPaths[path]).length) continue;
 
     for (const method of HTTP_METHODS) {
       const oldOperation = asRecord(ctx.oldDocument, oldPathItem[method]);
@@ -1018,8 +1232,9 @@ function comparePaths(ctx: CompareContext): void {
 function sourceDescription(
   document: OpenApiDocument,
   fingerprint: AnalysisResult["source"]["old"]["fingerprint"],
+  bundle?: AnalysisResult['source']['old']['bundle'],
 ): AnalysisResult["source"]["old"] {
-  const result: AnalysisResult["source"]["old"] = { openapi: document.openapi, fingerprint };
+  const result: AnalysisResult["source"]["old"] = { openapi: document.openapi, fingerprint, dialect: dialectFor(document), ...(bundle ? { bundle } : {}) };
   if (typeof document.info?.title === "string") result.title = document.info.title;
   if (typeof document.info?.version === "string") result.version = document.info.version;
   return result;
@@ -1050,10 +1265,11 @@ export function analyzeCompatibility(
   newSpec: OpenApiInput,
   options: AnalyzeOptions = {},
 ): AnalysisResult {
-  const oldFingerprint = fingerprintOpenApiInput(oldSpec);
-  const newFingerprint = fingerprintOpenApiInput(newSpec);
-  const oldDocument = parseOpenApi(oldSpec).document;
-  const newDocument = parseOpenApi(newSpec).document;
+  const oldPrepared = prepareContract(oldSpec);
+  const newPrepared = prepareContract(newSpec);
+  const oldDocument = oldPrepared.document;
+  const newDocument = newPrepared.document;
+  const coverage = inspectCoverage(oldDocument, newDocument);
   const policy = resolveRulePolicy(options.policy);
   const ctx: CompareContext = {
     oldDocument,
@@ -1086,12 +1302,13 @@ export function analyzeCompatibility(
     generatedAt: timestamp,
     policy: policy.metadata,
     source: {
-      old: sourceDescription(oldDocument, oldFingerprint),
-      new: sourceDescription(newDocument, newFingerprint),
+      old: sourceDescription(oldDocument, oldPrepared.fingerprint, oldPrepared.bundle),
+      new: sourceDescription(newDocument, newPrepared.fingerprint, newPrepared.bundle),
     },
     score: Math.max(0, 100 - Math.min(100, risk)),
     compatible: summary.breaking === 0,
     summary,
     changes,
+    coverage,
   };
 }

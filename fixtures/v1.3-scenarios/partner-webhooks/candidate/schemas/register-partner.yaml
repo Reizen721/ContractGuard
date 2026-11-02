@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [displayName, callbackUrl, deliveryMode]
+properties:
+  displayName:
+    type: string
+    minLength: 1
+  callbackUrl:
+    type: string
+    minLength: 1
+    description: HTTPS destination verified during partner onboarding.
+  deliveryMode:
+    type: string
+    enum: [immediate, batched]

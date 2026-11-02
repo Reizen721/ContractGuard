@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express, { type ErrorRequestHandler, type Express, type RequestHandler } from 'express';
 import {
-  analyzeCompatibility,
+  analyzeRelease,
   ContractGuardError,
   ENGINE_VERSION,
   ruleCatalog,
@@ -15,10 +15,15 @@ import {
 import type { AiRuntimeConfig } from './ai/config.js';
 import { createDeepSeekAiService, type DeepSeekAiConfig } from './ai/deepseek.js';
 import { createMultiProviderAiService } from './ai/service.js';
+import { AiReviewCoordinator } from './ai/review-coordinator.js';
+import { AiReviewStore } from './ai/review-store.js';
+import { renderAiReview } from './ai/review-report.js';
 import { AiServiceError, type AiReviewLanguage, type AiReviewRequest, type AiReviewService } from './ai/types.js';
 import { renderReport, type ReportFormat } from './reports.js';
 import { AnalysisStore } from './store.js';
 import type { ApiErrorBody, StoredAnalysis } from './types.js';
+import { createAgentRouter } from './agent/router.js';
+import { createCallerRouter } from './caller/router.js';
 
 export interface AppOptions {
   dataDirectory?: string;
@@ -33,6 +38,8 @@ export interface AppOptions {
   aiConfigPath?: string;
   aiEnvironment?: NodeJS.ProcessEnv;
   rulePolicy?: RulePolicy;
+  oasdiffPath?: string;
+  projectConfigPath?: string;
 }
 
 export function createApp(options: AppOptions = {}): Express {
@@ -58,6 +65,8 @@ export function createApp(options: AppOptions = {}): Express {
         ...(options.aiFetch === undefined ? {} : { fetch: options.aiFetch }),
         config: options.aiConfig!,
       }));
+  const reviewStore = new AiReviewStore(dataDirectory);
+  const reviewCoordinator = new AiReviewCoordinator(aiService, reviewStore);
 
   app.disable('x-powered-by');
   app.use(cors({
@@ -66,7 +75,25 @@ export function createApp(options: AppOptions = {}): Express {
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   }));
-  app.use(express.json({ limit: maxSpecBytes * 2 + 64 * 1024 }));
+  // Caller reviews add explicit source and up to 30 bounded response scenarios.
+  // Per-field UTF-8 limits remain enforced by each engine after JSON parsing.
+  app.use(express.json({ limit: maxSpecBytes * 2 + 10 * 1024 * 1024 }));
+  app.use('/api/caller-reviews', createCallerRouter({
+    dataDirectory: join(dataDirectory, 'caller-reviews'),
+    onExecutor: (executor) => { app.locals.closeCaller = () => executor.close(); },
+  }));
+  app.use('/api/agent', createAgentRouter({
+    dataDirectory: join(dataDirectory, 'agent-runs'),
+    callerDataDirectory: join(dataDirectory, 'caller-reviews'),
+    ...(options.projectConfigPath === undefined ? {} : { projectConfigPath: options.projectConfigPath }),
+    onManager: (manager) => { app.locals.closeAgent = () => manager.close(); },
+    ...(options.oasdiffPath === undefined ? {} : { oasdiffPath: options.oasdiffPath }),
+    ...(options.aiConfig === undefined ? {} : { aiConfig: options.aiConfig }),
+    ...(options.aiRuntimeConfig === undefined ? {} : { aiRuntimeConfig: options.aiRuntimeConfig }),
+    ...(options.aiConfigPath === undefined ? {} : { aiConfigPath: options.aiConfigPath }),
+    ...(options.aiEnvironment === undefined ? {} : { aiEnvironment: options.aiEnvironment }),
+    ...(options.aiFetch === undefined ? {} : { aiFetch: options.aiFetch }),
+  }));
 
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok', service: 'contractguard-api', version: ENGINE_VERSION });
@@ -94,23 +121,27 @@ export function createApp(options: AppOptions = {}): Express {
     if (!isPlainObject(request.body)) {
       throw httpError(400, 'INVALID_REQUEST', 'The request body must be a JSON object. Set Content-Type to application/json.');
     }
-    const { baseline, candidate, baselineName, candidateName } = request.body;
+    const { baseline, candidate, baselineName, candidateName, consumerEvidence } = request.body;
+    const fields = new Set(['baseline', 'candidate', 'baselineName', 'candidateName', 'consumerEvidence']);
+    if (Object.keys(request.body).some((field) => !fields.has(field))) {
+      throw httpError(400, 'INVALID_REQUEST', 'Unsupported analysis field. Use consumerEvidence for optional consumer examples.');
+    }
     validateSpecInput(baseline, 'baseline', maxSpecBytes);
     validateSpecInput(candidate, 'candidate', maxSpecBytes);
     validateName(baselineName, 'baselineName');
     validateName(candidateName, 'candidateName');
 
     const createdAt = new Date().toISOString();
-    const result = analyzeCompatibility(
+    const result = analyzeRelease(
       baseline as string | Record<string, unknown>,
       candidate as string | Record<string, unknown>,
-      rulePolicy === undefined ? {} : { policy: rulePolicy },
+      { ...(rulePolicy === undefined ? {} : { policy: rulePolicy }), ...(consumerEvidence === undefined ? {} : { consumerEvidence }) },
     );
     const analysis: StoredAnalysis = {
       ...result,
       id: randomUUID(),
-      baselineName: typeof baselineName === 'string' && baselineName.trim() ? baselineName.trim() : 'baseline.yaml',
-      candidateName: typeof candidateName === 'string' && candidateName.trim() ? candidateName.trim() : 'candidate.yaml',
+      baselineName: typeof baselineName === 'string' && baselineName.trim() ? baselineName.trim() : contractName(baseline, 'baseline.yaml'),
+      candidateName: typeof candidateName === 'string' && candidateName.trim() ? candidateName.trim() : contractName(candidate, 'candidate.yaml'),
       createdAt,
     };
     await store.save(analysis);
@@ -133,7 +164,7 @@ export function createApp(options: AppOptions = {}): Express {
       if (controller.signal.aborted) return;
       if (!analysis) throw httpError(404, 'ANALYSIS_NOT_FOUND', 'The requested analysis does not exist.');
       const aiRequest = validateAiReviewRequest(request.body);
-      const review = await aiService.review(analysis, aiRequest, { signal: controller.signal });
+      const review = await reviewCoordinator.review(analysis, aiRequest, controller.signal);
       if (!controller.signal.aborted) response.json(review);
     } catch (error) {
       if (controller.signal.aborted && (request.aborted || response.destroyed)) return;
@@ -142,6 +173,28 @@ export function createApp(options: AppOptions = {}): Express {
       request.off('aborted', abortUpstream);
       response.off('close', abortUpstream);
     }
+  }));
+
+  app.get('/api/analyses/:id/ai-reviews', asyncHandler(async (request, response) => {
+    const id = routeId(request.params.id);
+    const analysis = await store.get(id);
+    if (!analysis) throw httpError(404, 'ANALYSIS_NOT_FOUND', 'The requested analysis does not exist.');
+    response.json({ reviews: await reviewStore.list(id) });
+  }));
+
+  app.get('/api/analyses/:id/ai-reviews/:reviewId/report', asyncHandler(async (request, response) => {
+    const id = routeId(request.params.id);
+    const analysis = await store.get(id);
+    if (!analysis) throw httpError(404, 'ANALYSIS_NOT_FOUND', 'The requested analysis does not exist.');
+    const format = String(request.query.format ?? 'json');
+    if (format !== 'json' && format !== 'markdown') {
+      throw httpError(400, 'INVALID_REPORT_FORMAT', 'AI report format must be json or markdown.');
+    }
+    const review = await reviewStore.get(id, routeId(request.params.reviewId));
+    if (!review) throw httpError(404, 'AI_REVIEW_NOT_FOUND', 'The requested AI review does not exist.');
+    response.setHeader('Content-Type', format === 'json' ? 'application/json; charset=utf-8' : 'text/markdown; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="contractguard-ai-${review.id}.${format === 'json' ? 'json' : 'md'}"`);
+    response.send(renderAiReview(review, format));
   }));
 
   app.get('/api/analyses/:id/report', asyncHandler(async (request, response) => {
@@ -163,9 +216,12 @@ export function createApp(options: AppOptions = {}): Express {
   }));
 
   app.delete('/api/analyses/:id', asyncHandler(async (request, response) => {
-    if (!(await store.delete(routeId(request.params.id)))) {
+    const id = routeId(request.params.id);
+    if (!(await store.get(id))) {
       throw httpError(404, 'ANALYSIS_NOT_FOUND', 'The requested analysis does not exist.');
     }
+    await reviewCoordinator.discardAnalysis(id);
+    await store.delete(id);
     response.status(204).send();
   }));
 
@@ -202,9 +258,22 @@ function validateSpecInput(value: unknown, field: string, maxBytes: number): ass
   }
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   if (!serialized.trim()) throw httpError(400, 'INVALID_REQUEST', `${field} cannot be empty.`);
-  if (Buffer.byteLength(serialized, 'utf8') > maxBytes) {
+  let size = Buffer.byteLength(serialized, 'utf8');
+  if (isPlainObject(value) && value.kind === 'bundle') {
+    if (!Array.isArray(value.files) || value.files.length === 0 || value.files.length > 50
+      || !value.files.every((file) => isPlainObject(file) && typeof file.content === 'string')) {
+      throw httpError(400, 'INVALID_BUNDLE', `${field}.files must contain 1-50 explicit text files.`);
+    }
+    size = value.files.reduce((total, file) => total + Buffer.byteLength((file as { content: string }).content, 'utf8'), 0);
+  }
+  if (size > maxBytes) {
     throw httpError(413, 'SPEC_TOO_LARGE', `${field} exceeds the configured ${maxBytes}-byte limit.`);
   }
+}
+
+function contractName(value: unknown, fallback: string): string {
+  return isPlainObject(value) && value.kind === 'bundle' && typeof value.entry === 'string'
+    ? value.entry.slice(0, 200) : fallback;
 }
 
 function routeId(value: string | string[] | undefined): string {
@@ -227,7 +296,7 @@ function validateAiReviewRequest(value: unknown): AiReviewRequest {
   if (!isPlainObject(value)) {
     throw httpError(400, 'INVALID_AI_REVIEW_REQUEST', 'The AI review request body must be a JSON object.');
   }
-  const unexpected = Object.keys(value).find((key) => key !== 'language' && key !== 'focus' && key !== 'providerId');
+  const unexpected = Object.keys(value).find((key) => key !== 'language' && key !== 'focus' && key !== 'providerId' && key !== 'force');
   if (unexpected !== undefined) {
     throw httpError(400, 'INVALID_AI_REVIEW_REQUEST', `Unsupported AI review field: ${unexpected}.`);
   }
@@ -237,6 +306,9 @@ function validateAiReviewRequest(value: unknown): AiReviewRequest {
   }
   if (value.focus !== undefined && (typeof value.focus !== 'string' || value.focus.length > 500)) {
     throw httpError(400, 'INVALID_AI_REVIEW_REQUEST', 'focus must be a string no longer than 500 characters.');
+  }
+  if (value.force !== undefined && typeof value.force !== 'boolean') {
+    throw httpError(400, 'INVALID_AI_REVIEW_REQUEST', 'force must be a boolean.');
   }
   if (value.providerId !== undefined && (
     typeof value.providerId !== 'string'
@@ -253,6 +325,7 @@ function validateAiReviewRequest(value: unknown): AiReviewRequest {
     language: language as AiReviewLanguage,
     ...(focus ? { focus } : {}),
     ...(typeof value.providerId === 'string' ? { providerId: value.providerId } : {}),
+    ...(value.force === undefined ? {} : { force: value.force as boolean }),
   };
 }
 

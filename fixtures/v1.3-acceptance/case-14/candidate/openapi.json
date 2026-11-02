@@ -1,0 +1,23 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContractGuard V1.3 acceptance 14",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "orderPaid": {
+      "$ref": "./webhooks/order-paid.json"
+    }
+  }
+}

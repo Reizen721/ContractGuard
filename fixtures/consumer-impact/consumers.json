@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "consumers": [
+    {
+      "id": "mobile-checkout", "name": "Mobile checkout", "owner": "Checkout team", "criticality": "critical",
+      "interactions": [{
+        "id": "single-item-order", "name": "Buy one item and open the receipt", "method": "POST", "path": "/orders",
+        "request": { "mediaType": "application/json", "body": { "sku": "DEMO-BOOK", "quantity": 1 } },
+        "response": {
+          "status": "201", "mediaType": "application/json",
+          "baselineBody": { "id": "order-demo-001", "status": "accepted", "receiptUrl": "/receipts/order-demo-001" },
+          "candidateBody": { "id": "order-demo-002", "status": "accepted" },
+          "expectation": {
+            "type": "object", "required": ["id", "receiptUrl"],
+            "properties": { "id": { "type": "string" }, "receiptUrl": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }]
+    },
+    {
+      "id": "analytics-dashboard", "name": "Revenue dashboard", "owner": "Data team", "criticality": "standard",
+      "interactions": [{
+        "id": "daily-revenue", "name": "Render daily revenue", "method": "GET", "path": "/stats",
+        "response": {
+          "status": "200", "mediaType": "application/json",
+          "baselineBody": { "revenue": 12345, "currency": "USD" },
+          "candidateBody": { "revenue": 23456, "currency": "USD" },
+          "expectation": { "type": "object", "required": ["revenue", "currency"], "properties": { "revenue": { "type": "integer", "minimum": 0 }, "currency": { "type": "string", "enum": ["USD"] } } }
+        }
+      }]
+    },
+    {
+      "id": "inventory-sync", "name": "European inventory sync", "owner": "Fulfilment team", "criticality": "standard",
+      "interactions": [{
+        "id": "sync-eu", "name": "Synchronize European stock", "method": "GET", "path": "/inventory",
+        "request": { "parameters": { "query": { "region": "eu" } } }
+      }]
+    }
+  ]
+}

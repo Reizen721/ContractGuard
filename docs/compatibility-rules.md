@@ -46,6 +46,7 @@ ContractGuard 1.1.0 可以通过受校验的规则策略启停规则、覆盖 se
 | `PARAMETER_ADDED_OPTIONAL` | 新增可选参数 | `non-breaking` | 旧请求仍有效 |
 | `PARAMETER_REQUIRED` | 参数由可选变为必填 | `breaking` | 旧请求可能缺失它 |
 | `PARAMETER_OPTIONAL` | 参数由必填变为可选 | `non-breaking` | 扩大可接受请求集合 |
+| `PARAMETER_SERIALIZATION_CHANGED` | 规范化后的 style、explode、allowReserved 或 content 媒体类型变化 | `potentially-breaking` | 相同参数值可能需要不同的线上编码；省略值与规范默认值等价时不报 |
 | `REQUEST_BODY_REMOVED` | 删除既有请求体 | `potentially-breaking` | 旧客户端仍可能发送 body；具体取决于服务器 |
 | `REQUEST_BODY_ADDED_REQUIRED` | 无 body 的操作新增必填 body | `breaking` | 旧请求无法满足新约束 |
 | `REQUEST_BODY_ADDED_OPTIONAL` | 新增可选 body | `non-breaking` | 不要求旧客户端改变 |
@@ -64,8 +65,13 @@ ContractGuard 1.1.0 可以通过受校验的规则策略启停规则、覆盖 se
 | `RESPONSE_STATUS_ADDED` | 新增可能状态码 | 2xx 为 `potentially-breaking`；其他为 `non-breaking` | 新成功分支可能需要客户端处理；补充错误文档本身不缩窄旧契约 |
 | `RESPONSE_MEDIA_TYPE_REMOVED` | 删除既有响应媒体类型 | `breaking` | 客户端可能无法获得可解析表示 |
 | `RESPONSE_MEDIA_TYPE_ADDED` | 新增响应媒体类型 | `non-breaking` | 在静态契约层面保留旧表示；实际内容协商仍需测试 |
+| `RESPONSE_HEADER_REMOVED` | 删除响应头 | `potentially-breaking` | 客户端可能读取分页、限额等响应头，需核实消费者依赖 |
+| `RESPONSE_HEADER_ADDED` | 新增响应头 | `non-breaking` | 保留原有响应头 |
+| `RESPONSE_HEADER_SERIALIZATION_CHANGED` | 响应头的规范化序列化选项变化 | `potentially-breaking` | 旧客户端解析方式可能失效 |
 
 状态码判断是结构性近似。把 `201` 改为 `200`，即使 body 相同，也可能影响依赖状态码的客户端；新增 `500` 声明并不意味着服务刚开始可能失败，因此需要结合运行语义审查。
+
+V1.2 比较响应头时不区分名称大小写，忽略 OpenAPI `headers` 映射中没有效力的 `Content-Type` 项；头部 schema 的类型、枚举等变化继续使用既有方向性 Schema 规则，而不另造一套判断。
 
 ### 3.4 Schema 类型、枚举与属性
 
@@ -78,13 +84,27 @@ ContractGuard 1.1.0 可以通过受校验的规则策略启停规则、覆盖 se
 | `SCHEMA_ENUM_WIDENED` | `non-breaking`：接受更多输入 | `potentially-breaking`：客户端可能未知新值 |
 | `SCHEMA_REQUIRED_PROPERTY_ADDED` | `breaking`：旧请求缺少新字段 | 通常 `non-breaking`：服务保证提供更多字段 |
 | `SCHEMA_REQUIRED_PROPERTY_REMOVED` | `non-breaking`：放宽请求要求 | `breaking`：客户端依赖的字段可能缺失 |
-| `SCHEMA_PROPERTY_REMOVED` | `breaking`：旧客户端可能继续发送 | `breaking`：旧客户端可能读取该字段 |
-| `SCHEMA_PROPERTY_ADDED` | 可选属性通常 `non-breaking` | 通常 `non-breaking`，严格解码器场景可人工升级为潜在风险 |
+| `SCHEMA_PROPERTY_REMOVED` | 取决于 candidate 的 `additionalProperties`：明确拒绝旧值时为 `breaking`，继续接受时为 `non-breaking`，不能证明则为潜在风险 | `breaking`：旧客户端可能读取该字段 |
+| `SCHEMA_PROPERTY_ADDED` | 可选不代表兼容：对原本开放对象增加类型约束可能为 `breaking`；旧对象明确禁止该额外属性时通常兼容，复杂条件下人工复核 | 通常 `non-breaking`，严格解码器场景可人工升级为潜在风险 |
 | `SCHEMA_CONSTRAINT_TIGHTENED` | `breaking`：如提高 `minLength`、降低 `maximum` | 通常放宽客户端预期，但需结合关键字判断 |
 | `SCHEMA_CONSTRAINT_RELAXED` | `non-breaking`：接受更多输入 | 可能扩大实际输出集合，必要时标为 `potentially-breaking` |
 | `SCHEMA_UNSUPPORTED_KEYWORD_CHANGED` | `const`、`format`、`not`、条件 schema 等尚不能精确证明集合关系时标为 `potentially-breaking` | 响应方向同样标为 `potentially-breaking` 并要求评审 |
+| `SCHEMA_COMPOSITION_CHANGED` | 不能证明等价的 `oneOf`/`anyOf`/`allOf` 变化为 `potentially-breaking` | 同样人工复核，不按分支数量或数组位置推断安全 |
 
 约束规则只在能够安全比较时触发。不同类型之间、正则表达式包含关系、复杂数组约束等无法仅靠数值大小判定的情况，不应伪装成精确结论。
+
+V1.2 将 OpenAPI 3.0 的 `minimum` + 布尔 `exclusiveMinimum`（以及对应上界）与 OpenAPI 3.1 的独立数值边界归一为 `{value, exclusive}`。同时存在边界时使用较强约束；整数类型比较等价整数区间，避免 `> 0` 与 `>= 1` 的误报。
+
+组合分支按有界、引用感知的语义签名比较，纯文档修改及等价重排不报；`oneOf` 的重复分支不能去重，因为它要求恰好匹配一支。不能证明等价或超出比较预算时会保守提示，而不是把更多分支当作安全扩展。这仍不是一般 Schema 包含关系求解器。
+
+V1.3 进一步按方言处理类型和引用，以下修正可能改变旧版报告中的个别判断：
+
+- OpenAPI 3.0 的 `nullable: true` 只有在同一 Schema 显式声明 `type` 时才加入 `null`；OpenAPI 3.1 使用 `type: [string, "null"]` 等联合类型，旧式 `nullable` 不生效并产生覆盖告警。
+- `properties` 或 `items` 本身不等于声明 `type: object` 或 `type: array`，引擎不会据此补出类型。OpenAPI 3.0 的 `additionalProperties: true/false` 是合法的关键字值，与 3.1 的独立布尔 Schema 分开处理。
+- 普通 Reference Object 在 3.0 中忽略 `$ref` 旁的其他字段，在 3.1 中只允许 `summary`、`description` 覆盖。3.1 Schema 的 `$ref` 相邻约束是合取：可证明的简单约束可合并，复杂情况保留 `allOf`，变化按 `SCHEMA_COMPOSITION_CHANGED` 等潜在风险处理，并提示分析范围有限。
+- Path Item 有自己的引用语义：引用目标的 `get` 与本体的 `post` 可以共存；同名字段冲突且值不同时，规范没有定义合并结果。引擎会报告 `PATH_ITEM_REFERENCE_CONFLICT` 并停止对该路径作精确差异判断。
+
+未知 `jsonSchemaDialect` / `$schema`、资源作用域和未实现的复杂关键字会进入覆盖提示；受未知方言或资源作用域影响的 Schema 不继续给出精确的安全判断。方言标识是解释依据，不表示已经实现该方言的所有验证语义。支持边界与可运行示例见 [V1.3 升级与多文件使用](./v1.3-upgrade.md)。
 
 ### 3.5 鉴权与元数据
 
@@ -114,6 +134,10 @@ paths./pets/{petId}.get.responses.200.content.application/json.schema.properties
 
 `before` 与 `after` 仅保存解释该结论所需的值，避免把整份规范复制进每条结果。`recommendation` 应给出可执行建议，例如“先将字段作为 optional 发布，等待客户端完成迁移后再设为 required”。
 
+V1.3 支持显式提交的本地多文件契约包。可定位时，`sourceLocations.old/new` 额外给出 `{ file, pointer }`，例如 `schemas/pet.yaml` 和 `#/properties/id/type`；原有 `location` 继续用于规则定位。合成位置无法一一映射时使用最近已知祖先，不提供推测的行号。来源元数据中的 `dialect` 说明方言，`bundle.entry` 与 `bundle.files` 记录入口和实际引用依赖的 SHA-256。只有入口及其传递依赖参与包指纹，文件列表顺序不影响结果；指纹用于核对输入身份，不证明契约内容正确。
+
+多文件包必须显式包含所需文件，核心引擎不读取磁盘或访问网络。每包最多 50 个 YAML/JSON 文件，全部 `content` 的 UTF-8 大小合计最多 5 MiB。相对引用必须留在包内，并仅使用支持的文件路径与 JSON Pointer；缺失依赖、远程引用、命名 anchor 或需要 `$id` 资源基址解析的包引用会明确失败，不会作为“未发现变化”处理。
+
 ## 5. 分数与门禁
 
 当前兼容性分数从 100 开始：每个 `breaking` 扣 12 分，每个 `potentially-breaking` 扣 4 分，最低为 0；`non-breaking` 和 `info` 不扣分。这个权重是可解释的展示启发式，不是经验概率。分数适合用来快速比较多个变更集，但不能用“85 分”抵消一个关键的 breaking 条目。未来调整权重时应提升引擎版本并更新评估记录。
@@ -125,6 +149,10 @@ CLI 的 `--fail-on` 决定进程退出状态：
 - `never`：分析成功即返回成功，风险仅写入报告。
 
 CI 中建议先使用 `breaking`，在规则基准集稳定后再逐步提高门槛。
+
+V1.3 的 `coverage` 与以上严重等级和 `compatible` 独立。`complete` 只表示在已实现的分析范围内没有检测到已知覆盖告警；`partial` 表示有待人工核对的范围，不是准确率或覆盖百分比。告警带 `code`、`side`、`location`、说明和可选原文件来源，最多保留 100 条；`truncated: true` 表示告警数量或文本被截断。策略禁用规则或改变等级不会隐藏这些告警。旧历史没有 `coverage` 时应显示“未记录/未知”。
+
+默认门禁仍由 `--fail-on` 控制，因此 `compatible: true` 可以与 `coverage.status: "partial"` 同时出现。希望未完整覆盖也阻止 CI 时，显式增加 `--fail-on-incomplete`；该选项在 coverage 为 partial 时返回退出码 2，即使没有 breaking。它不把覆盖告警改造成 breaking finding。
 
 ## 6. 示例解释
 
@@ -144,16 +172,18 @@ CI 中建议先使用 `breaking`，在规则基准集稳定后再逐步提高门
 
 ## 7. 当前不覆盖或仅部分覆盖
 
-- 外部和跨文件 `$ref`；
+- 远程 `$ref`、命名 anchor，以及需要 `$id` 资源基址解析的包引用；显式本地文件包中的相对文件 + JSON Pointer 引用已支持；
+- 未知 Schema 方言、`$dynamicRef` / 动态作用域，以及未实现关键字的一般验证语义；
 - 循环引用的完整语义等价判断；
 - `oneOf`、`anyOf`、`allOf`、`not`、discriminator 的一般包含关系；
 - 正则表达式语言包含关系；
-- 回调、链接、webhook 的客户端影响；
+- 回调、链接、webhook、multipart encoding 和服务器地址的完整客户端影响；
+- Path Item 引用的同名字段冲突，以及超出递归或比较预算的语义；
 - 业务错误码、速率限制、排序、分页语义和数据含义；
 - 实际网关是否忽略未知参数，以及特定 SDK 的序列化/解码行为；
 - 非 OpenAPI 描述的身份、权限、SLA 和性能变化。
 
-遇到这些情况应结合消费者契约测试和人工评审。任何未来新增规则都应附带正例、反例和一个“无法确定”的边界用例。
+V1.3 会对已识别的未覆盖范围给出 coverage 提示；扫描只沿契约语义位置进行，不把 `example`、`default` 中的业务 JSON 当作 Schema。输入错误和不支持的引用解析仍明确失败，不会一律转成 partial。遇到这些情况应结合消费者契约测试和人工评审。任何未来新增规则都应附带正例、反例和一个“无法确定”的边界用例。
 
 ## 8. 规则维护原则
 

@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "file",
+    "filename",
+    "sizeBytes",
+    "checksum"
+  ],
+  "properties": {
+    "file": {
+      "$ref": "./binary-file.json"
+    },
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "sizeBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2097152,
+      "description": "Client-declared byte length. Server must separately verify actual uploaded bytes."
+    },
+    "checksum": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 32
+      }
+    }
+  }
+}

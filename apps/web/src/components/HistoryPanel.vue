@@ -13,6 +13,14 @@ const emit = defineEmits<{
   remove: [analysis: AnalysisRecord]
   refresh: []
 }>()
+
+function consumerGate(analysis: AnalysisRecord) { return analysis.consumerImpactError ? undefined : analysis.consumerGate ?? analysis.consumerImpact?.gate }
+function consumerCounts(analysis: AnalysisRecord) { return analysis.consumerSummary ?? analysis.consumerImpact?.summary }
+function consumerLabel(analysis: AnalysisRecord): string {
+  const gate = consumerGate(analysis)
+  return gate === 'blocked' ? '发现样例回归' : gate === 'review' ? '需要复核' : gate === 'pass' ? '样例范围内通过'
+    : analysis.consumerImpactError ? '结果待复核' : '未记录验证'
+}
 </script>
 
 <template>
@@ -46,8 +54,9 @@ const emit = defineEmits<{
           <tr>
             <th scope="col">规范对比</th>
             <th scope="col">时间</th>
-            <th scope="col">评分</th>
+            <th scope="col">静态评分</th>
             <th scope="col">变更概览</th>
+            <th scope="col">调用方样例</th>
             <th scope="col"><span class="sr-only">操作</span></th>
           </tr>
         </thead>
@@ -62,13 +71,18 @@ const emit = defineEmits<{
               <code>{{ analysis.id }}</code>
             </td>
             <td><time :datetime="analysis.createdAt">{{ formatDate(analysis.createdAt) }}</time></td>
-            <td><span class="score-badge" :class="analysis.compatible ? 'pass' : 'fail'" :aria-label="`兼容性评分 ${analysis.score} 分`">{{ analysis.score }}</span></td>
+            <td><span class="score-badge" :class="analysis.compatible ? 'pass' : 'fail'" :aria-label="`静态兼容性评分 ${analysis.score} 分`">{{ analysis.score }}</span></td>
             <td>
               <div class="history-counts">
                 <span class="danger">{{ analysis.summary.breaking }} 破坏</span>
                 <span class="warning">{{ analysis.summary.potentiallyBreaking }} 风险</span>
                 <span>{{ analysis.summary.total }} 总计</span>
               </div>
+            </td>
+            <td class="history-consumer">
+              <strong :class="consumerGate(analysis) ? `consumer-status--${consumerGate(analysis)}` : ''">{{ consumerLabel(analysis) }}</strong>
+              <span v-if="consumerGate(analysis) && consumerCounts(analysis)">{{ consumerCounts(analysis)!.regressions }} 回归 · {{ consumerCounts(analysis)!.inconclusive + consumerCounts(analysis)!.invalidBaselines }} 待确认 · {{ consumerCounts(analysis)!.checks }} 检查</span>
+              <span v-else>请打开报告查看范围</span>
             </td>
             <td class="history-actions">
               <button class="icon-button" type="button" title="查看报告" :aria-label="`查看 ${analysis.candidateName} 的分析报告`" @click="emit('open', analysis)">↗</button>

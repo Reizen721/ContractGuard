@@ -1,0 +1,23 @@
+[
+  {
+    "id": "order-label", "file": "orders.ts", "exportName": "orderLabel", "args": [],
+    "operation": { "method": "GET", "path": "/orders/current" },
+    "baselineResponse": { "status": 200, "body": { "id": "ORD-101", "customerName": "Alice" } },
+    "candidateResponse": { "status": 200, "body": { "id": "ORD-101", "displayName": "Alice" } },
+    "expected": "ALICE"
+  },
+  {
+    "id": "order-reference", "file": "orders.ts", "exportName": "orderReference", "args": [],
+    "operation": { "method": "GET", "path": "/orders/current" },
+    "baselineResponse": { "status": 200, "body": { "id": "ORD-101", "customerName": "Alice" } },
+    "candidateResponse": { "status": 200, "body": { "id": "ORD-101", "displayName": "Alice" } },
+    "expected": "ORD-101"
+  },
+  {
+    "id": "profile-email", "file": "profile.ts", "exportName": "contactEmail", "args": [],
+    "operation": { "method": "GET", "path": "/profile" },
+    "baselineResponse": { "status": 200, "body": { "email": "ALICE@EXAMPLE.TEST" } },
+    "candidateResponse": { "status": 200, "body": { "contactEmail": "ALICE@EXAMPLE.TEST" } },
+    "expected": "alice@example.test"
+  }
+]

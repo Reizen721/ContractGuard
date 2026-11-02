@@ -1,0 +1,4 @@
+interface:
+  display_name: "ContractGuard"
+  short_description: "Review API changes, caller code evidence, and migration patches"
+  default_prompt: "Use $contractguard to compare my API contracts, inspect authorized TypeScript callers, replay supplied scenarios, and explain the saved evidence and proposed migrations."

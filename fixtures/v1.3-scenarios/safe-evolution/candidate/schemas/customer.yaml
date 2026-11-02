@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [customerId, displayName, status]
+properties:
+  customerId:
+    type: string
+  displayName:
+    type: string
+  status:
+    type: string
+    enum: [active, suspended]
+  preferredStore:
+    type: [string, "null"]
+    maxLength: 32

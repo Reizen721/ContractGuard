@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Batch processing and results delivery",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/jobs": {
+      "post": {
+        "operationId": "submitJob",
+        "requestBody": {
+          "$ref": "./request-bodies/submit.json"
+        },
+        "responses": {
+          "201": {
+            "$ref": "./responses/job-state.json"
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}": {
+      "parameters": [
+        {
+          "$ref": "./parameters/job-id.json"
+        }
+      ],
+      "get": {
+        "operationId": "getJob",
+        "responses": {
+          "200": {
+            "$ref": "./responses/job-state.json"
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}/results": {
+      "parameters": [
+        {
+          "$ref": "./parameters/job-id.json"
+        }
+      ],
+      "get": {
+        "operationId": "getJobResults",
+        "responses": {
+          "200": {
+            "$ref": "./responses/results.json"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "$ref": "./responses/health.json"
+          }
+        }
+      }
+    }
+  }
+}

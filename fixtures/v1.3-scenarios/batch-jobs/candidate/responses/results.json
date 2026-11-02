@@ -1,0 +1,10 @@
+{
+  "description": "Job results",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/results.json"
+      }
+    }
+  }
+}

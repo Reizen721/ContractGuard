@@ -1,0 +1,8 @@
+[
+  {
+    "method": "GET",
+    "path": "/orders/current",
+    "from": "customerName",
+    "to": "displayName"
+  }
+]

@@ -1,0 +1,49 @@
+get:
+  operationId: listOrders
+  summary: List orders visible to the current customer
+  parameters:
+    - name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [pending, paid, cancelled]
+    - name: cursor
+      in: query
+      required: false
+      description: Opaque continuation token; omission starts at the first page.
+      schema:
+        type: string
+        maxLength: 256
+  responses:
+    '200':
+      description: Order history page
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [orders]
+            properties:
+              orders:
+                type: array
+                items:
+                  $ref: ../schemas/order.yaml
+              nextCursor:
+                type: string
+post:
+  operationId: createOrder
+  summary: Submit a checkout order
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/new-order.yaml
+  responses:
+    '201':
+      description: Order created
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/order.yaml

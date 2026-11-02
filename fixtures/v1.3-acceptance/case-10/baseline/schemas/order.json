@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": [
+    "shippingAddress"
+  ],
+  "properties": {
+    "shippingAddress": {
+      "$ref": "./address.json"
+    }
+  }
+}

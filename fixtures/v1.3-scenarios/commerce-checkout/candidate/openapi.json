@@ -1,0 +1,52 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Commerce checkout and order tracking",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/checkouts": {
+      "post": {
+        "operationId": "createCheckout",
+        "parameters": [
+          {
+            "$ref": "./parameters/idempotency-key.json"
+          }
+        ],
+        "requestBody": {
+          "$ref": "./request-bodies/checkout.json"
+        },
+        "responses": {
+          "201": {
+            "$ref": "./responses/order-created.json"
+          }
+        }
+      }
+    },
+    "/orders/{orderId}": {
+      "parameters": [
+        {
+          "$ref": "./parameters/order-id.json"
+        }
+      ],
+      "get": {
+        "operationId": "getOrder",
+        "responses": {
+          "200": {
+            "$ref": "./responses/order-ok.json"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "$ref": "./responses/health.json"
+          }
+        }
+      }
+    }
+  }
+}

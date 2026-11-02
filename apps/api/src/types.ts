@@ -15,6 +15,8 @@ export interface AnalysisSummary {
   score: number;
   compatible: boolean;
   summary: StoredAnalysis['summary'];
+  consumerGate?: NonNullable<StoredAnalysis['consumerImpact']>['gate'];
+  consumerSummary?: NonNullable<StoredAnalysis['consumerImpact']>['summary'];
 }
 
 export interface ApiErrorBody {

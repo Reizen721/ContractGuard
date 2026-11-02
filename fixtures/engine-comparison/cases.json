@@ -1,0 +1,62 @@
+[
+  {
+    "id": "unchanged-contract-response-regression",
+    "description": "An optional provider response property disappears from a supplied candidate sample, but the consumer requires it.",
+    "baseline": "baseline.json",
+    "candidate": "baseline.json",
+    "evidence": "response-regression.json",
+    "expected": {
+      "staticBreaking": false,
+      "consumerGate": "blocked",
+      "regressions": 1,
+      "passed": 0,
+      "inconclusive": 0,
+      "invalidBaselines": 0
+    }
+  },
+  {
+    "id": "request-minimum-tightened",
+    "description": "Minimum quantity increases from 1 to 2. A single-item request fails; a five-item request still passes.",
+    "baseline": "baseline.json",
+    "candidate": "candidate-minimum.json",
+    "evidence": "request-consumers.json",
+    "expected": {
+      "staticBreaking": true,
+      "consumerGate": "blocked",
+      "regressions": 1,
+      "passed": 1,
+      "inconclusive": 0,
+      "invalidBaselines": 0
+    }
+  },
+  {
+    "id": "unchanged-contract-positive-control",
+    "description": "Identical provider schemas and both response samples satisfy the consumer requirement.",
+    "baseline": "baseline.json",
+    "candidate": "baseline.json",
+    "evidence": "positive-control.json",
+    "expected": {
+      "staticBreaking": false,
+      "consumerGate": "pass",
+      "regressions": 0,
+      "passed": 1,
+      "inconclusive": 0,
+      "invalidBaselines": 0
+    }
+  },
+  {
+    "id": "missing-candidate-evidence",
+    "description": "Identical contracts with baseline evidence only. The missing candidate response must remain inconclusive.",
+    "baseline": "baseline.json",
+    "candidate": "baseline.json",
+    "evidence": "missing-candidate.json",
+    "expected": {
+      "staticBreaking": false,
+      "consumerGate": "review",
+      "regressions": 0,
+      "passed": 0,
+      "inconclusive": 1,
+      "invalidBaselines": 0
+    }
+  }
+]

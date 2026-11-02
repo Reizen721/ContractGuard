@@ -4,12 +4,17 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/core/package.json packages/core/package.json
+COPY packages/caller/package.json packages/caller/package.json
+COPY packages/project/package.json packages/project/package.json
+COPY packages/oasdiff/package.json packages/oasdiff/package.json
+COPY packages/mcp/package.json packages/mcp/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/cli/package.json apps/cli/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+RUN node scripts/install-oasdiff.mjs
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
@@ -24,6 +29,22 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/core/package.json ./packages/core/package.json
 COPY --from=builder /app/packages/core/dist ./packages/core/dist
 COPY --from=builder /app/packages/core/node_modules ./packages/core/node_modules
+COPY --from=builder /app/packages/caller/package.json ./packages/caller/package.json
+COPY --from=builder /app/packages/caller/dist ./packages/caller/dist
+COPY --from=builder /app/packages/caller/node_modules ./packages/caller/node_modules
+COPY --from=builder /app/packages/project/package.json ./packages/project/package.json
+COPY --from=builder /app/packages/project/dist ./packages/project/dist
+COPY --from=builder /app/packages/project/node_modules ./packages/project/node_modules
+COPY --from=builder /app/packages/oasdiff/package.json ./packages/oasdiff/package.json
+COPY --from=builder /app/packages/oasdiff/dist ./packages/oasdiff/dist
+COPY --from=builder /app/packages/oasdiff/node_modules ./packages/oasdiff/node_modules
+COPY --from=builder /app/packages/mcp/package.json ./packages/mcp/package.json
+COPY --from=builder /app/packages/mcp/dist ./packages/mcp/dist
+COPY --from=builder /app/packages/mcp/node_modules ./packages/mcp/node_modules
+COPY --from=builder /app/config/oasdiff-lock.json ./config/oasdiff-lock.json
+COPY --from=builder /app/.tools ./.tools
+COPY --from=builder /app/THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md
+COPY --from=builder /app/third_party/oasdiff/LICENSE ./third_party/oasdiff/LICENSE
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules

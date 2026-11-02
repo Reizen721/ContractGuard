@@ -1,0 +1,8 @@
+{
+  "name": "jobId",
+  "in": "path",
+  "required": true,
+  "schema": {
+    "type": "string"
+  }
+}

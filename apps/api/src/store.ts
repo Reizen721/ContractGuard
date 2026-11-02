@@ -55,7 +55,7 @@ export class AnalysisStore {
     return analyses
       .filter((value): value is StoredAnalysis => value !== null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(({ id, baselineName, candidateName, createdAt, score, compatible, summary }) => ({
+      .map(({ id, baselineName, candidateName, createdAt, score, compatible, summary, consumerImpact }) => ({
         id,
         baselineName,
         candidateName,
@@ -63,6 +63,7 @@ export class AnalysisStore {
         score,
         compatible,
         summary,
+        ...(consumerImpact ? { consumerGate: consumerImpact.gate, consumerSummary: consumerImpact.summary } : {}),
       }));
   }
 

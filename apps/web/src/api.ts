@@ -1,4 +1,4 @@
-import type { AiReviewReport, AiServiceStatus, AnalysisRecord, ExportFormat, RuleDefinition } from './types'
+import type { AiReviewReport, AiServiceStatus, AnalysisRecord, ContractBundleInput, ExportFormat, RuleDefinition } from './types'
 import {
   normalizeAiReview,
   normalizeAiStatus,
@@ -60,14 +60,16 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 export async function createAnalysis(input: {
-  baseline: string
-  candidate: string
+  baseline: string | ContractBundleInput
+  candidate: string | ContractBundleInput
   baselineName?: string
   candidateName?: string
-}): Promise<AnalysisRecord> {
+  consumerEvidence?: Record<string, unknown>
+}, signal?: AbortSignal): Promise<AnalysisRecord> {
   const result = await request('/analyses', {
     method: 'POST',
     body: JSON.stringify(input),
+    signal,
   })
   return normalizeAnalysis(result)
 }
@@ -76,8 +78,8 @@ export async function listAnalyses(): Promise<AnalysisRecord[]> {
   return normalizeAnalysisList(await request('/analyses'))
 }
 
-export async function getAnalysis(id: string): Promise<AnalysisRecord> {
-  return normalizeAnalysis(await request(`/analyses/${encodeURIComponent(id)}`))
+export async function getAnalysis(id: string, signal?: AbortSignal): Promise<AnalysisRecord> {
+  return normalizeAnalysis(await request(`/analyses/${encodeURIComponent(id)}`, { signal }))
 }
 
 export async function deleteAnalysis(id: string): Promise<void> {
@@ -94,7 +96,7 @@ export async function getAiStatus(signal?: AbortSignal): Promise<AiServiceStatus
 
 export async function generateAiReview(
   analysisId: string,
-  input: { language: 'zh-CN'; focus?: string; providerId?: string },
+  input: { language: 'zh-CN'; focus?: string; providerId?: string; force?: boolean },
   signal?: AbortSignal,
 ): Promise<AiReviewReport> {
   const result = await request(`/analyses/${encodeURIComponent(analysisId)}/ai-review`, {
@@ -103,6 +105,29 @@ export async function generateAiReview(
     signal,
   })
   return normalizeAiReview(result)
+}
+
+export async function listAiReviews(analysisId: string, signal?: AbortSignal): Promise<AiReviewReport[]> {
+  const value = await request(`/analyses/${encodeURIComponent(analysisId)}/ai-reviews`, { signal }) as { reviews?: unknown[] }
+  return Array.isArray(value.reviews) ? value.reviews.map(normalizeAiReview) : []
+}
+
+export async function downloadAiReview(report: AiReviewReport, format: 'json' | 'markdown'): Promise<void> {
+  if (!report.id) throw new Error('此旧版解读尚未保存，请重新生成后导出。')
+  const response = await fetch(`${API_BASE}/analyses/${encodeURIComponent(report.analysisId)}/ai-reviews/${encodeURIComponent(report.id)}/report?format=${format}`)
+  if (!response.ok) throw new ApiError(`AI 解读导出失败（HTTP ${response.status}）`, response.status)
+  downloadBlob(await response.blob(), `contractguard-ai-${report.id}.${extensionFor(format)}`)
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 function extensionFor(format: ExportFormat): string {
@@ -117,13 +142,5 @@ export async function downloadReport(
     `${API_BASE}/analyses/${encodeURIComponent(analysis.id)}/report?format=${encodeURIComponent(format)}`,
   )
   if (!response.ok) throw new ApiError(`报告导出失败（HTTP ${response.status}）`, response.status)
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `contractguard-${analysis.id}.${extensionFor(format)}`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
+  downloadBlob(await response.blob(), `contractguard-${analysis.id}.${extensionFor(format)}`)
 }

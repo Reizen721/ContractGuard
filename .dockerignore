@@ -8,11 +8,15 @@ coverage
 .git
 .github
 **/data/analyses/*
+data/agent-cli/
+data/caller-reviews/
 .env
 .env.*
 !.env.example
 config/*.local.json
 config/llm-providers.json
 outputs
+.tools
+.impeccable/review
 *.log
 *.tsbuildinfo

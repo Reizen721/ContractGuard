@@ -1,0 +1,16 @@
+{
+  "version": "1.35.0",
+  "repository": "https://github.com/oasdiff/oasdiff",
+  "tag": "v1.35.0",
+  "sourceCommit": "a4ba100f880c7579765c5e63915a99bf1acc6967",
+  "license": "Apache-2.0",
+  "releaseBaseUrl": "https://github.com/oasdiff/oasdiff/releases/download/v1.35.0/",
+  "assets": {
+    "win32-x64": { "file": "oasdiff_1.35.0_windows_amd64.tar.gz", "sha256": "5cdea2b64bd083d16dff19dba3aae011a0b7388ab33df81051cfc76800bf73e0", "binary": "oasdiff.exe" },
+    "win32-arm64": { "file": "oasdiff_1.35.0_windows_arm64.tar.gz", "sha256": "da981a1d29092d43e692e65f90c5ce90232849e2aa9a7c1e417bd85108e58d98", "binary": "oasdiff.exe" },
+    "linux-x64": { "file": "oasdiff_1.35.0_linux_amd64.tar.gz", "sha256": "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140", "binary": "oasdiff" },
+    "linux-arm64": { "file": "oasdiff_1.35.0_linux_arm64.tar.gz", "sha256": "1f8b5aa033cd0240ae6c53460268bcd6e578526666a4487a781ece8cef39fbdd", "binary": "oasdiff" },
+    "darwin-x64": { "file": "oasdiff_1.35.0_darwin_all.tar.gz", "sha256": "964ad2c0331768c4515fc49779827094bc89a65b1d309dac28886d1c3faf305c", "binary": "oasdiff" },
+    "darwin-arm64": { "file": "oasdiff_1.35.0_darwin_all.tar.gz", "sha256": "964ad2c0331768c4515fc49779827094bc89a65b1d309dac28886d1c3faf305c", "binary": "oasdiff" }
+  }
+}

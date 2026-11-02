@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Caller migration example",
+      "version": "1.0.0"
+    },
+    "paths": {
+      "/orders/current": {
+        "get": {
+          "operationId": "getCurrentOrder",
+          "responses": {
+            "200": {
+              "description": "Current order",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "customerName"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "customerName": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/profile": {
+        "get": {
+          "operationId": "getProfile",
+          "responses": {
+            "200": {
+              "description": "Profile",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "email"
+                    ],
+                    "properties": {
+                      "email": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Caller migration example",
+      "version": "2.0.0"
+    },
+    "paths": {
+      "/orders/current": {
+        "get": {
+          "operationId": "getCurrentOrder",
+          "responses": {
+            "200": {
+              "description": "Current order",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/profile": {
+        "get": {
+          "operationId": "getProfile",
+          "responses": {
+            "200": {
+              "description": "Profile",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "contactEmail"
+                    ],
+                    "properties": {
+                      "contactEmail": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "orders.ts",
+      "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+    },
+    {
+      "path": "profile.ts",
+      "content": "import axios from 'axios';\n\nexport async function contactEmail() {\n  const response = await axios.get('/profile');\n  return response.data.email.toLowerCase();\n}\n"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "order-label",
+      "file": "orders.ts",
+      "exportName": "orderLabel",
+      "args": [],
+      "operation": {
+        "method": "GET",
+        "path": "/orders/current"
+      },
+      "baselineResponse": {
+        "status": 200,
+        "body": {
+          "id": "ORD-101",
+          "customerName": "Alice"
+        }
+      },
+      "candidateResponse": {
+        "status": 200,
+        "body": {
+          "id": "ORD-101",
+          "displayName": "Alice"
+        }
+      },
+      "expected": "ALICE"
+    },
+    {
+      "id": "order-reference",
+      "file": "orders.ts",
+      "exportName": "orderReference",
+      "args": [],
+      "operation": {
+        "method": "GET",
+        "path": "/orders/current"
+      },
+      "baselineResponse": {
+        "status": 200,
+        "body": {
+          "id": "ORD-101",
+          "customerName": "Alice"
+        }
+      },
+      "candidateResponse": {
+        "status": 200,
+        "body": {
+          "id": "ORD-101",
+          "displayName": "Alice"
+        }
+      },
+      "expected": "ORD-101"
+    },
+    {
+      "id": "profile-email",
+      "file": "profile.ts",
+      "exportName": "contactEmail",
+      "args": [],
+      "operation": {
+        "method": "GET",
+        "path": "/profile"
+      },
+      "baselineResponse": {
+        "status": 200,
+        "body": {
+          "email": "ALICE@EXAMPLE.TEST"
+        }
+      },
+      "candidateResponse": {
+        "status": 200,
+        "body": {
+          "contactEmail": "ALICE@EXAMPLE.TEST"
+        }
+      },
+      "expected": "alice@example.test"
+    }
+  ],
+  "fieldRenames": [
+    {
+      "method": "GET",
+      "path": "/orders/current",
+      "from": "customerName",
+      "to": "displayName"
+    },
+    {
+      "method": "GET",
+      "path": "/profile",
+      "from": "email",
+      "to": "contactEmail"
+    }
+  ]
+}

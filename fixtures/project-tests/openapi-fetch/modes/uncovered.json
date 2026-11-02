@@ -1,0 +1,6 @@
+{
+  "kind": "rename",
+  "path": "/posts/not-in-existing-tests",
+  "from": "title",
+  "to": "headline"
+}

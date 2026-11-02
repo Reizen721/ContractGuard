@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "consumers": [
+    {
+      "id": "quantity-1",
+      "name": "Single-item checkout",
+      "owner": "Checkout team",
+      "criticality": "critical",
+      "interactions": [
+        {
+          "id": "order",
+          "method": "POST",
+          "path": "/orders",
+          "request": {
+            "mediaType": "application/json",
+            "body": {
+              "quantity": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "quantity-5",
+      "name": "Bulk checkout",
+      "owner": "Checkout team",
+      "criticality": "critical",
+      "interactions": [
+        {
+          "id": "order",
+          "method": "POST",
+          "path": "/orders",
+          "request": {
+            "mediaType": "application/json",
+            "body": {
+              "quantity": 5
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

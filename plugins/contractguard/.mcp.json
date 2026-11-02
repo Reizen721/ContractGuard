@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "contractguard": {
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/server/index.cjs"],
+      "cwd": "${PLUGIN_ROOT}",
+      "env": { "CONTRACTGUARD_API_URL": "http://127.0.0.1:8080" }
+    }
+  }
+}

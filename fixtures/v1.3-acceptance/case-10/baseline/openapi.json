@@ -1,0 +1,25 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContractGuard acceptance 10",
+    "version": "1"
+  },
+  "paths": {
+    "/orders": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/order.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

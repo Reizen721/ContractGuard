@@ -1,0 +1,22 @@
+{
+  "get": {
+    "operationId": "getAsset",
+    "parameters": [
+      {
+        "$ref": "../parameters/asset-id.json"
+      }
+    ],
+    "responses": {
+      "200": {
+        "description": "Asset metadata",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "../schemas/asset.json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

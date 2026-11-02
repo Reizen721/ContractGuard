@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "projects": [
+    {
+      "id": "upstream-control",
+      "label": "未变化对照",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/baseline.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "upstream-field-rename",
+      "label": "字段改名",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/renamed.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/renamed.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "upstream-status-change",
+      "label": "成功状态变化",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/status.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/status.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "upstream-behavior-only",
+      "label": "契约未变但测试观测值改变",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/baseline.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/behavior.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "upstream-invalid-baseline",
+      "label": "基线已有失败",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/baseline.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/renamed.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ]
+      }
+    },
+    {
+      "id": "upstream-uncovered-route",
+      "label": "已有测试未访问的路径",
+      "root": "openapi-fetch",
+      "include": [
+        "src",
+        "test",
+        "package.json",
+        "vitest.config.mjs"
+      ],
+      "baseline": "contracts/baseline.json",
+      "candidate": "contracts/baseline.json",
+      "caller": {
+        "files": [
+          "test/helpers.ts"
+        ]
+      },
+      "tests": {
+        "trusted": true,
+        "runner": "vitest",
+        "files": [
+          "test/http-methods/get.test.ts"
+        ],
+        "config": "vitest.config.mjs",
+        "timeoutMs": 30000,
+        "baseline": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/control.json"
+          }
+        ],
+        "candidate": [
+          {
+            "target": "test/mutation.json",
+            "source": "modes/uncovered.json"
+          }
+        ]
+      }
+    }
+  ]
+}

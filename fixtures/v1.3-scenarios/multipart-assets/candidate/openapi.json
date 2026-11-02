@@ -1,0 +1,29 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ContractGuard complex multipart-assets",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/assets": {
+      "$ref": "./paths/upload.json"
+    },
+    "/assets/import": {
+      "$ref": "./paths/import.json"
+    },
+    "/assets/{assetId}": {
+      "$ref": "./paths/asset.json"
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          }
+        }
+      }
+    }
+  }
+}

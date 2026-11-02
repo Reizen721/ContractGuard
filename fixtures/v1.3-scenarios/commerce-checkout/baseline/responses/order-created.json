@@ -1,0 +1,10 @@
+{
+  "description": "Order created",
+  "content": {
+    "application/json": {
+      "schema": {
+        "$ref": "../schemas/order.json"
+      }
+    }
+  }
+}

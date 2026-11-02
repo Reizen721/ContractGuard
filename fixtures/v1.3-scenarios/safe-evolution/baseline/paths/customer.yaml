@@ -1,0 +1,17 @@
+get:
+  operationId: getCustomer
+  summary: Read a customer profile
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    '200':
+      description: Customer profile
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/customer.yaml

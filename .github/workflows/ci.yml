@@ -26,6 +26,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm engine:install
       - run: pnpm check
       - name: Verify the breaking fixture fails the policy
         shell: bash

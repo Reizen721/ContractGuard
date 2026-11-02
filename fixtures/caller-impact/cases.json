@@ -1,0 +1,1300 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "unchanged-control",
+      "description": "Unchanged response and actual source return the explicit expected output.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "orders.ts",
+            "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "orders.ts",
+            "exportName": "orderLabel",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          },
+          {
+            "id": "order-reference",
+            "file": "orders.ts",
+            "exportName": "orderReference",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "expected": "ORD-101"
+          }
+        ]
+      },
+      "expect": {
+        "gate": "pass",
+        "passed": 2,
+        "regressions": 0
+      }
+    },
+    {
+      "id": "rename-without-mapping",
+      "description": "Existing order caller fails against renamed response; no automatic semantic rename guess.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "2.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "displayName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "contactEmail"
+                          ],
+                          "properties": {
+                            "contactEmail": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "orders.ts",
+            "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "orders.ts",
+            "exportName": "orderLabel",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "displayName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          }
+        ]
+      },
+      "expect": {
+        "gate": "blocked",
+        "regressions": 1,
+        "verifiedPatches": 0
+      }
+    },
+    {
+      "id": "explicit-verified-renames",
+      "description": "Two real caller files, three scenarios, two regressions and an unchanged control; explicit mappings verify candidate patches.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "2.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "displayName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "contactEmail"
+                          ],
+                          "properties": {
+                            "contactEmail": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "orders.ts",
+            "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+          },
+          {
+            "path": "profile.ts",
+            "content": "import axios from 'axios';\n\nexport async function contactEmail() {\n  const response = await axios.get('/profile');\n  return response.data.email.toLowerCase();\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "orders.ts",
+            "exportName": "orderLabel",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "displayName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          },
+          {
+            "id": "order-reference",
+            "file": "orders.ts",
+            "exportName": "orderReference",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "displayName": "Alice"
+              }
+            },
+            "expected": "ORD-101"
+          },
+          {
+            "id": "profile-email",
+            "file": "profile.ts",
+            "exportName": "contactEmail",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/profile"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "email": "ALICE@EXAMPLE.TEST"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "contactEmail": "ALICE@EXAMPLE.TEST"
+              }
+            },
+            "expected": "alice@example.test"
+          }
+        ],
+        "fieldRenames": [
+          {
+            "method": "GET",
+            "path": "/orders/current",
+            "from": "customerName",
+            "to": "displayName"
+          },
+          {
+            "method": "GET",
+            "path": "/profile",
+            "from": "email",
+            "to": "contactEmail"
+          }
+        ]
+      },
+      "expect": {
+        "gate": "blocked",
+        "regressions": 2,
+        "passed": 1,
+        "verifiedPatches": 2
+      }
+    },
+    {
+      "id": "invalid-baseline",
+      "description": "Missing baseline field cannot establish a valid baseline or count as demonstrated regression.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "2.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "displayName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "contactEmail"
+                          ],
+                          "properties": {
+                            "contactEmail": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "orders.ts",
+            "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "orders.ts",
+            "exportName": "orderLabel",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "displayName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          }
+        ]
+      },
+      "expect": {
+        "invalidBaselines": 1,
+        "regressions": 0,
+        "verifiedPatches": 0
+      }
+    },
+    {
+      "id": "dynamic-url",
+      "description": "A dynamic request URL must retain an unknown coverage warning even when a supplied scenario can be evaluated.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "dynamic.ts",
+            "content": "export async function dynamicOrder(url: string) {\n  const response = await fetch(url);\n  const order = await response.json();\n  return order.id;\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "dynamic.ts",
+            "exportName": "dynamicOrder",
+            "args": [
+              "/orders/current"
+            ],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "expected": "ORD-101"
+          }
+        ]
+      },
+      "expect": {
+        "gate": "review",
+        "unknownMinimum": 1
+      }
+    },
+    {
+      "id": "unsupported-eval",
+      "description": "Untrusted eval syntax is never executed and remains inconclusive.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "unsupported.ts",
+            "content": "export async function unsupportedEvaluation() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return eval(order.customerName);\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "unsupported.ts",
+            "exportName": "unsupportedEvaluation",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          }
+        ]
+      },
+      "expect": {
+        "gate": "review",
+        "inconclusive": 1,
+        "regressions": 0
+      }
+    },
+    {
+      "id": "invalid-rename-target",
+      "description": "A mapping to a field absent from the candidate contract must never produce a verified patch.",
+      "input": {
+        "schemaVersion": 1,
+        "baseline": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "customerName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customerName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "email"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "candidate": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Caller migration example",
+            "version": "2.0.0"
+          },
+          "paths": {
+            "/orders/current": {
+              "get": {
+                "operationId": "getCurrentOrder",
+                "responses": {
+                  "200": {
+                    "description": "Current order",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "displayName"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/profile": {
+              "get": {
+                "operationId": "getProfile",
+                "responses": {
+                  "200": {
+                    "description": "Profile",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "object",
+                          "required": [
+                            "contactEmail"
+                          ],
+                          "properties": {
+                            "contactEmail": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": [
+          {
+            "path": "orders.ts",
+            "content": "export async function orderLabel() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.customerName.toUpperCase();\n}\n\nexport async function orderReference() {\n  const response = await fetch('/orders/current');\n  const order = await response.json();\n  return order.id;\n}\n"
+          }
+        ],
+        "scenarios": [
+          {
+            "id": "order-label",
+            "file": "orders.ts",
+            "exportName": "orderLabel",
+            "args": [],
+            "operation": {
+              "method": "GET",
+              "path": "/orders/current"
+            },
+            "baselineResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "customerName": "Alice"
+              }
+            },
+            "candidateResponse": {
+              "status": 200,
+              "body": {
+                "id": "ORD-101",
+                "displayName": "Alice"
+              }
+            },
+            "expected": "ALICE"
+          }
+        ],
+        "fieldRenames": [
+          {
+            "method": "GET",
+            "path": "/orders/current",
+            "from": "customerName",
+            "to": "missingName"
+          }
+        ]
+      },
+      "expect": {
+        "verifiedPatches": 0
+      }
+    }
+  ]
+}

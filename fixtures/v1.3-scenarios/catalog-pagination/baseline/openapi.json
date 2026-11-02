@@ -1,0 +1,52 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Catalog search and cursor pagination",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/catalog/products": {
+      "get": {
+        "operationId": "listProducts",
+        "parameters": [
+          {
+            "$ref": "./parameters/catalog.json#/Tags"
+          },
+          {
+            "$ref": "./parameters/catalog.json#/PageSize"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "./responses/product-page.json"
+          }
+        }
+      }
+    },
+    "/catalog/products/{productId}": {
+      "parameters": [
+        {
+          "$ref": "./parameters/product-id.json"
+        }
+      ],
+      "get": {
+        "operationId": "getProduct",
+        "responses": {
+          "200": {
+            "$ref": "./responses/product.json"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "$ref": "./responses/health.json"
+          }
+        }
+      }
+    }
+  }
+}

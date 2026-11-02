@@ -1,300 +1,144 @@
-# ContractGuard — OpenAPI Breaking Change Detector
+# ContractGuard
 
-[简体中文](README.zh-CN.md) · English
+**Follow an API change from its contract to the code that consumes it.**
+
+[简体中文](README.zh-CN.md) · [User guide / 使用文档](docs/v2.0-user-guide.md) · [2.0 release notes](docs/releases/v2.0.0.en.md)
 
 [![CI](https://github.com/Reizen721/ContractGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/Reizen721/ContractGuard/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Reizen721/ContractGuard?display_name=tag)](https://github.com/Reizen721/ContractGuard/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-2f6f61.svg)](LICENSE)
-[![Node.js >= 22.13](https://img.shields.io/badge/Node.js-%3E%3D22.13-3c873a.svg)](package.json)
+[![Release](https://img.shields.io/github/v/release/Reizen721/ContractGuard)](https://github.com/Reizen721/ContractGuard/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-43853d.svg)](package.json)
 
-![ContractGuard — explainable OpenAPI compatibility checks](docs/assets/contractguard-hero.svg)
+ContractGuard is a local API change review workbench and MCP plugin. It combines OpenAPI compatibility findings, TypeScript caller evidence, migration proposals and existing project tests in a saved review. Use it in a browser, from the command line, or through an MCP-capable agent.
 
-**Find where existing API consumers may break—before the contract reaches production.** ContractGuard is a local-first, explainable OpenAPI compatibility analyzer for design review and CI quality gates.
+An optional LLM can plan the review and explain findings. Checks and the release gate remain deterministic.
 
-ContractGuard compares a released OpenAPI contract (the baseline) with a proposed contract (the candidate) and identifies changes that may break existing consumers. It goes beyond showing what changed: each finding includes a severity, stable rule ID, precise contract location, relevant before/after evidence, and remediation guidance.
+![ContractGuard 2.0 workbench with baseline and candidate contract inputs](docs/assets/v2.0-workbench.png)
 
-All compatibility decisions come from a deterministic rule engine. The optional multi-LLM interpreter can use server-configured DeepSeek, OpenAI, Gemini, or Ollama profiles to turn existing findings into a risk summary, migration plan, and test suggestions; it does not participate in scoring or release gating.
+## What a review answers
 
-The current release targets OpenAPI 3.0 and 3.1. Refer to the official [OpenAPI 3.0.4 specification](https://spec.openapis.org/oas/v3.0.4.html), [OpenAPI 3.1.2 specification](https://spec.openapis.org/oas/v3.1.2.html), and [published specification index](https://spec.openapis.org/oas/) for the authoritative syntax.
-
-**[View a real report](examples/reports/petstore-breaking.md) · [Run locally](#run-it-in-five-minutes) · [Add it to CI](#cli-and-ci-usage) · [Read the rule model](docs/compatibility-rules.md)**
-
-Verified by the repository's automated test and end-to-end fixture suites. See the reproducible [verification record](docs/verification.md); fixture coverage is not presented as real-world accuracy.
-
-## See the result
-
-Run the bundled fixture after installation:
-
-```bash
-pnpm demo
-```
-
-```text
-ContractGuard: petstore-v1.yaml -> petstore-v2-breaking.yaml
-Score 0/100 | BREAKING CHANGES | breaking 22 | potential 8 | safe 1 | info 1
-```
-
-Every finding carries a stable rule ID, severity, exact OpenAPI location, before/after evidence, and remediation. Use the Web workspace for review, export JSON/Markdown/HTML, or return exit code `2` to block an incompatible pull request.
-
-## Why it exists
-
-Two OpenAPI documents can both be valid while the newer contract still breaks old clients. For example:
-
-- making an optional query parameter required causes an old app to receive `400` responses;
-- removing a response property breaks a frontend or SDK that still reads it;
-- narrowing a request enum rejects input that used to be valid;
-- widening a response enum surprises clients with exhaustive branches;
-- changing a success status or adding authentication changes an established call flow.
-
-A validator answers whether a document is syntactically valid. A text diff answers which lines changed. ContractGuard answers the release question: **where might existing consumers fail, why, and what should the team migrate or test first?**
-
-## Where it fits
-
-| Scenario | How ContractGuard helps |
+| Question | Evidence you can inspect |
 | --- | --- |
-| Pull request gate | Compare the released and proposed contracts in CI and return exit code `2` when findings reach the selected threshold |
-| API design review | Inspect risk locations, evidence, and remediation in the Web workspace before implementation |
-| SDK/client migration | Export Markdown or HTML and optionally generate a staged migration and regression-test checklist |
-| Version audit and handoff | Feed JSON reports into automation and keep reviewable analysis history in local files |
+| What changed in the API contract? | Directional native rules, official oasdiff checks, contract locations and coverage limitations |
+| Which supplied callers rely on it? | TypeScript callsites, field accesses, source fingerprints and bounded response replay |
+| Does the candidate break the selected project tests? | Baseline and candidate runs of registered Node/Vitest test files |
+| Does a proposed migration help? | Explicit field-rename diffs, caller re-verification and a patched test run when applicable |
+| Can we revisit this decision? | Saved review IDs, linked evidence, history and reports shared by Web and MCP |
 
-ContractGuard is a static contract analyzer. It is not runtime monitoring, an API security scanner, or production traffic validation.
+The included orders example changes `customerName` to `displayName`. One caller fails while an identifier lookup still works. ContractGuard proposes the explicitly supplied rename and runs the same existing tests against baseline, candidate and patched copies. A passing patch does **not** erase the original API compatibility risk.
 
-## Capabilities
+## Start locally
 
-| Capability | Current implementation |
-| --- | --- |
-| Deterministic rule engine | Checks paths, operations, parameters, request bodies, responses, media types, schemas, security, and selected metadata |
-| Direction-aware analysis | Reasons separately about accepted requests and produced responses instead of classifying identical schema edits mechanically |
-| Explainable findings | Returns a stable rule ID, severity, contract location, before/after evidence, and remediation guidance |
-| Web workspace | Imports, drops, or pastes two YAML/JSON specifications; filters results, opens history, browses rules, and exports reports |
-| CLI and CI gate | Supports `table`, `json`, `markdown`, and `html` output with configurable failure thresholds |
-| REST API | Creates, reads, and deletes analyses; lists rules; exports JSON, Markdown, and HTML reports |
-| Local persistence | Stores analysis records as local JSON files with no database requirement |
-| Policy as code | Enables, suppresses, or reclassifies known rules and customizes score weights through validated JSON |
-| Reproducible audit metadata | Records SHA-256 fingerprints for baseline, candidate, and the normalized rule policy |
-| Optional multi-LLM review | Selects an enabled DeepSeek, OpenAI, Gemini, or Ollama profile and produces a structured review from bounded finding context |
-
-## Run it in five minutes
-
-### 1. Prerequisites
-
-- Node.js 22.13 or newer;
-- pnpm 11.19.0, pinned by the repository's `packageManager` field and lockfile.
-
-Node.js 22 installations can normally enable pnpm through Corepack:
-
-```bash
-corepack enable
-corepack prepare pnpm@11.19.0 --activate
-```
-
-If Corepack is not available:
-
-```bash
-npm install --global pnpm@11.19.0
-```
-
-### 2. Install, build, and start
+Requirements: **Node.js 22.13+** and **pnpm 11.19.0**. If pnpm is missing, run `npm install --global pnpm@11.19.0`. On Windows, use `npm.cmd` / `pnpm.cmd` if PowerShell blocks the corresponding `.ps1` script.
 
 ```bash
 git clone https://github.com/Reizen721/ContractGuard.git
 cd ContractGuard
 pnpm install --frozen-lockfile
+pnpm engine:install
 pnpm build
 pnpm start
 ```
 
-Open `http://localhost:8080`, select “载入演示规范” (load demo contracts), and then select “运行兼容性分析” (run compatibility analysis). AI is disabled by default, so the first analysis requires no API key and makes no model request.
+Open **http://127.0.0.1:8080**. Contract analysis and workflow reviews need no model account. `engine:install` downloads the pinned official oasdiff binary; subsequent local checks use that installed binary.
 
-For development:
-
-```bash
-pnpm dev
-```
-
-The Web development server runs at `http://localhost:5173` and proxies `/api` to the API on local port `8080`.
-
-### Windows launcher
-
-The BAT entry point calls a PowerShell 5.1-compatible launcher with a temporary execution-policy bypass. On the first run, install the locked dependencies, build, and start with:
+On Windows, installation and startup are also available through:
 
 ```powershell
-.\start-contractguard.bat --install
+.\start-contractguard.bat --install --no-ai
 ```
 
-Normal and maintenance modes:
+For a complete caller-migration demo, stop the server with `Ctrl+C`, then load the supplied project registry:
 
 ```powershell
-.\start-contractguard.bat
-# Or start with a V1.1 profile file:
-.\start-contractguard.bat --config .\config\llm-providers.local.json
-# Rebuild after changing source files, then start:
-.\start-contractguard.bat --build
-# Run only the deterministic analyzer:
-.\start-contractguard.bat --no-ai
-# Validate runtime, builds, LLM JSON and rule policy without starting:
-.\start-contractguard.bat --check --config .\config\llm-providers.local.json --policy .\config\rule-policy.example.json
+.\start-contractguard.bat --projects .\fixtures\project-tests\demo-registry.json --no-ai
 ```
 
-With no argument, the launcher automatically uses `config\llm-providers.local.json` when it exists; otherwise it retains the legacy DeepSeek flow. It validates JSON with the server parser, rejects missing or stale builds, honors existing environment settings, and securely asks only for a missing key of an enabled active profile. Supplied keys exist only in the server process environment and are not written to a project file. The launcher deliberately does not load `.env`; inject secrets through the current process or a secret manager. Run `start-contractguard.bat --help` for all modes, including host/port overrides and non-pausing automation. If a custom Windows path contains CMD metacharacters such as `&`, set `CONTRACTGUARD_LLM_CONFIG`/`CONTRACTGUARD_POLICY_CONFIG` in PowerShell instead of passing that path through a BAT argument.
+In the Agent workspace, select **订单字段迁移与已有测试** (`orders-migration`) and run a **workflow** review. Inspect contract findings, caller migration and three test phases. Expected test results: **2 passed → 1 passed / 1 failed → 2 passed**. This deliberately breaking example retains a blocked gate.
 
-## CLI and CI usage
-
-After building, run the bundled breaking-change example:
+On macOS/Linux, start the same demo with:
 
 ```bash
+CONTRACTGUARD_PROJECT_CONFIG=./fixtures/project-tests/demo-registry.json pnpm start
+```
+
+## Use it in an agent
+
+Keep the service running, then generate the plugin and client configuration:
+
+```bash
+pnpm plugin:prepare
+```
+
+`.tools/agent-plugin/` contains a portable plugin, local marketplace and configuration fragments for Codex, Antigravity, DeepSeek Harness and generic MCP clients. The transport is **local stdio** using Node.js and the existing HTTP service; this is not a hosted remote MCP endpoint.
+
+With Codex CLI installed, `pnpm plugin:prepare --codex` registers the MCP server. For other hosts, merge the generated fragment with existing settings and reload the host. For a different service port, use `pnpm plugin:prepare --api-url http://127.0.0.1:18083`. Keys stay in the service process, outside plugin configuration.
+
+Try this after registering the demo:
+
+> Use ContractGuard to list projects, then review `orders-migration` in workflow mode. Wait for completion. Explain the contract risks, affected callers and baseline/candidate/patched test results with evidence IDs. Show the proposed migration without modifying my source files.
+
+The **19 MCP tools** cover analysis, saved AI explanations, project discovery, Agent reviews, caller migration, history, cancellation and report export. Web and MCP share records when connected to the same service. See the [host installation guide](docs/v2.0-user-guide.md#6-在-codexantigravity-或其他-agent-中使用).
+
+## Optional DeepSeek planning
+
+For first-time Windows configuration:
+
+```powershell
+Copy-Item .\config\llm-providers.example.json .\config\llm-providers.local.json
+.\start-contractguard.bat --projects .\fixtures\project-tests\demo-registry.json
+```
+
+Enter your key at the **hidden local terminal prompt**. It is used by the process, not saved in JSON. Preserve an existing local profile when upgrading. The example selects `deepseek-cloud`; verify its model ID is available to your account.
+
+**LLM** mode lets the model select permitted checks and synthesize evidence-linked advice. **Workflow** uses a fixed model-free sequence. The separate **AI explanation** action interprets a completed analysis; it does not run an Agent review. Cloud calls incur normal provider charges. See [configuration and data boundaries](docs/v2.0-user-guide.md#5-配置-deepseek).
+
+## CLI and CI
+
+```bash
+# Quick contract example
 pnpm demo
-```
 
-To write a Markdown report and fail when a `breaking` finding is present:
-
-```bash
+# CI gate: exit 2 when breaking changes are found
 pnpm contractguard compare fixtures/petstore-v1.yaml fixtures/petstore-v2-breaking.yaml --format markdown --output contractguard-report.md --fail-on breaking
+
+# Local multi-file contracts
+pnpm contractguard compare fixtures/multifile/baseline/openapi.yaml fixtures/multifile/candidate/openapi.yaml --bundle --fail-on never
+
+# Native rules, caller evidence and existing project tests
+pnpm contractguard review-project orders-migration --registry fixtures/project-tests/demo-registry.json --format json --fail-on never
+
+# Official engine CLI passthrough
+pnpm contractguard oasdiff --help
 ```
 
-`--fail-on` accepts `breaking`, `potentially-breaking`, or `never`. Exit codes are:
+`compare` and `review-project` are local CLI workflows, not the complete built-in Agent sequence. Use the Agent workspace/MCP review or CLI `agent` command to combine both engines. CLI-created records do not automatically enter the HTTP service's history.
 
-- `0`: analysis completed and did not reach the selected threshold;
-- `1`: file, parsing, or execution error;
-- `2`: one or more findings reached the selected threshold.
+## Scope and trust
 
-A reusable workflow is available at [`examples/github-actions-contractguard.yml`](examples/github-actions-contractguard.yml). It assumes `openapi/released.yaml` and `openapi/candidate.yaml`; replace those paths for your repository.
+- Native normalization targets OpenAPI **3.0/3.1**, including bounded local multi-file bundles. Remote references are not fetched. Unsupported semantics remain visible as partial coverage or inconclusive evidence.
+- Caller analysis uses a bounded TypeScript interpreter, without executing arbitrary submitted source or making live API requests. Unknown SDKs and unsupported syntax need review.
+- Project tests execute trusted Node.js code in temporary source copies with fixed runners and limits. **This is not an OS sandbox.** Register projects and dependencies you trust; passing selected tests does not prove all consumers compatible.
+- Migration proposals cover explicit supported field renames. ContractGuard does not repair arbitrary applications or edit the original project.
+- Model advice needs review. Evidence-reference validation confirms references exist, not that every natural-language recommendation is correct.
 
-### Optional rule policy
+The upstream engine is **official oasdiff 1.35.0**, pinned and attributed. Native rules, caller evidence, test orchestration, persistence and MCP access are ContractGuard components. See [capability boundaries](docs/oasdiff-capabilities.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-V1.1 can apply an audited JSON policy to disable or reclassify known rules and customize scoring weights:
+## Documentation and verification
 
-```bash
-cp config/rule-policy.example.json config/rule-policy.local.json
-pnpm contractguard compare fixtures/petstore-v1.yaml fixtures/petstore-v2-breaking.yaml --policy config/rule-policy.local.json --fail-on breaking
-```
-
-For the API server, set `CONTRACTGUARD_POLICY_CONFIG=./config/rule-policy.local.json`. New results and exported reports include the normalized policy fingerprint plus baseline and candidate SHA-256 values; histories written by 1.0.x may not contain these optional fields. See [Rule policy and fingerprints](docs/rule-policy.md).
-
-## Optional multi-LLM integration
-
-AI review is not required for core analysis. V1.1 includes profiles for DeepSeek, OpenAI, Gemini, and Ollama and also accepts an administrator-named provider that implements the audited OpenAI-compatible chat contract. Start from the checked example and select the default with `activeProfile`:
-
-```powershell
-Copy-Item config/llm-providers.example.json config/llm-providers.local.json
-$env:CONTRACTGUARD_LLM_CONFIG = './config/llm-providers.local.json'
-$env:DEEPSEEK_API_KEY = '<YOUR_DEEPSEEK_API_KEY>'
-pnpm start
-```
-
-Edit the copied JSON to enable only the profiles you intend to use and replace placeholder model IDs. `allowRequestProfileOverride` controls whether the Web UI/API may select another enabled profile; when it is `false`, all requests use `activeProfile`. The browser sends only a profile ID—it cannot supply a URL, model, header, or credential.
-
-Each profile also declares the endpoint's request capabilities. In particular, use `tokenLimitParameter: "max_completion_tokens"` for OpenAI models that do not accept deprecated `max_tokens`; the checked example already demonstrates this distinction.
-
-Never put a real key in the JSON. Each bearer profile contains a `secretEnv` name such as `OPENAI_API_KEY`; the corresponding value must be injected into the server process. See [`config/llm-providers.example.json`](config/llm-providers.example.json), its strict [`JSON Schema`](config/llm-providers.schema.json), and [`.env.example`](.env.example). If `CONTRACTGUARD_LLM_CONFIG` is unset, the previous `CONTRACTGUARD_AI_ENABLED` and `DEEPSEEK_*` variables continue to provide a DeepSeek-only compatibility mode.
-
-Data and decision boundaries:
-
-- the API key is read server-side and is never returned to the browser;
-- the default request excludes the original OpenAPI documents and full finding `before`/`after` objects;
-- the model receives bounded finding summaries, which may still contain private endpoint names;
-- every model response must pass runtime structure validation;
-- model output cannot alter rule severity, compatibility score, the `compatible` flag, or CI exit codes.
-
-See the [AI report interpreter guide](docs/ai-report-interpreter.md) for the complete profile format, PowerShell, bash, Docker, status-check, and API examples. Cloud model usage may incur fees; review each selected provider's current terms, data handling, and pricing before enabling it. Official protocol references are linked in that guide rather than duplicating changeable model or price data here.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-Open `http://localhost:8080`. Compose binds to `127.0.0.1` by default and stores analysis history in a Docker volume. The project does not provide authentication, TLS, tenant isolation, rate limiting, or AI budget controls. Do not expose it directly to the public Internet; see the [Security Policy](SECURITY.md) for deployment requirements.
-
-## Troubleshooting
-
-| Symptom | Resolution |
+| Topic | Reference |
 | --- | --- |
-| `pnpm` is not found | Run `corepack enable` and `corepack prepare pnpm@11.19.0 --activate`, or install the pinned version with npm |
-| PowerShell blocks `pnpm.ps1` | Use `pnpm.cmd` instead; changing the system execution policy is unnecessary |
-| The UI reports that the analysis engine is offline | Confirm that the API is listening on port `8080`; in development, keep both processes launched by `pnpm dev` running |
-| The CLI exits with code `2` | This is the expected policy result when findings reach `--fail-on`, not a program crash |
-| AI is disabled or not configured | Check `CONTRACTGUARD_LLM_CONFIG`, `enabled`, `activeProfile`, the profile's `enabled` value, and its `secretEnv`; legacy mode still uses `CONTRACTGUARD_AI_ENABLED` plus `DEEPSEEK_API_KEY` |
-| The desired profile is not selectable | Enable it in the server JSON, set `allowRequestProfileOverride: true`, provide any required secret environment variable, and restart the API |
-| AI returns an unsupported-parameter error or invalid/truncated JSON | Confirm the profile's `structuredOutput` and `tokenLimitParameter` match the endpoint; retry, then raise `defaults.maxOutputTokens` or reduce `defaults.maxChanges` if needed |
+| Installation, demo, project registration, AI and MCP | [2.0 user guide](docs/v2.0-user-guide.md) |
+| Release and upgrade | [English](docs/releases/v2.0.0.en.md) · [中文](docs/releases/v2.0.0.zh-CN.md) · [Changelog](CHANGELOG.md) |
+| Integration and development | [HTTP API](docs/api-reference.md) · [Architecture](docs/architecture.md) · [Development](docs/development.md) |
+| Rules and implementation limits | [Native rules](docs/compatibility-rules.md) · [Caller migration](docs/v1.7-caller-migration.md) · [Project runner](docs/v1.8-project-agent.md) |
+| Evidence | [2.0 verification](docs/v2.0-verification.md) · [Verification history](docs/verification.md) · [Public-project benchmark](docs/v1.8-benchmark.md) · [Prior real DeepSeek acceptance](docs/v1.8-deepseek-acceptance.md) |
+| Deliverables | [Delivery checklist](docs/delivery-checklist.md) |
 
-See the [user-guide troubleshooting section](docs/user-guide.md#11-故障排查) and [AI error reference](docs/ai-report-interpreter.md#10-错误与降级) for more detail.
+`pnpm check` runs builds, type checks, tests and cross-entry regressions. Live DeepSeek acceptance is opt-in, outside the default model-free suite. Historical evidence is labelled by the version actually tested.
 
-## How it works
-
-```mermaid
-flowchart LR
-    A[Baseline OpenAPI] --> P[Parse and normalize]
-    B[Candidate OpenAPI] --> P
-    P --> D[Direction-aware comparison]
-    D --> R[Deterministic rules]
-    R --> S[Score and findings]
-    S --> W[Web review]
-    S --> C[CLI / CI gate]
-    S --> E[JSON / Markdown / HTML]
-    S --> M[Bounded finding context]
-    M --> AI[Optional selected LLM explanation]
-```
-
-The Web app, REST API, and CLI reuse the same core engine. The selected LLM profile lives on a separate explanatory branch; analysis, gating, and report export continue to work when every model is disabled or unavailable.
-
-## Repository layout
-
-```text
-apps/
-  api/       REST API, local persistence, report export, and multi-LLM adapter registry
-  cli/       local and CI command-line entry point
-  web/       Vue 3 Web workspace
-packages/
-  core/      OpenAPI parsing, local reference resolution, rules, and scoring
-fixtures/    reproducible compatible/breaking examples and evaluation manifest
-examples/    GitHub Actions and AI request examples
-config/      strict JSON schemas and examples for rule policies and LLM profiles
-docs/        architecture, rules, API, usage, development, evaluation, and verification
-scripts/     end-to-end smoke test
-```
-
-The engineering focus is broader than “adding an LLM”: it covers domain-rule modeling, shared frontend/backend behavior, a stable CLI contract, reproducible fixtures, automated testing, CI gating, and a trustworthy separation between generative explanation and deterministic decisions.
-
-## Verification
-
-```bash
-pnpm check
-```
-
-`pnpm check` runs the build, type checks, tests, documentation-link and example-configuration checks, and end-to-end smoke validation. Use `pnpm docs:check`, `pnpm config:check`, or `pnpm smoke` to rerun those stages independently. GitHub Actions performs the same class of checks on Node.js 22 and verifies that the breaking fixture triggers the expected gate. See [`docs/verification.md`](docs/verification.md) for the recorded local validation scope; it is not a claim of accuracy across every real-world OpenAPI document.
-
-## Current scope
-
-ContractGuard focuses on OpenAPI 3.0/3.1 and same-document JSON Pointer `$ref` values. The following still require other tools or human review:
-
-- Swagger 2.0;
-- external URL and cross-file references;
-- general `oneOf`, `anyOf`, `allOf`, discriminator, and other composition semantics;
-- business rules, database migrations, performance, SLAs, and runtime traffic behavior;
-- complete consumer-contract testing, integration testing, and progressive delivery.
-
-The compatibility score is a heuristic for risk ordering, not a mathematical proof of production safety. See [`docs/compatibility-rules.md`](docs/compatibility-rules.md) for rule coverage and decision semantics.
-
-## Documentation
-
-- [Project background, scenarios, and portfolio value](docs/project-overview.md)
-- [User guide](docs/user-guide.md)
-- [Architecture](docs/architecture.md)
-- [Compatibility rules](docs/compatibility-rules.md)
-- [Rule policy and input fingerprints](docs/rule-policy.md)
-- [REST API](docs/api-reference.md)
-- [Multi-LLM report interpreter](docs/ai-report-interpreter.md)
-- [Development guide](docs/development.md)
-- [Evaluation methodology](docs/evaluation.md)
-- [Verification record](docs/verification.md)
-- [Delivery and release checklist](docs/delivery-checklist.md)
-- [Changelog](CHANGELOG.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
+OpenAPI describes HTTP API paths, parameters, requests and responses. Official specifications: [overview](https://spec.openapis.org/oas/), [3.0.4](https://spec.openapis.org/oas/v3.0.4.html), [3.1.2](https://spec.openapis.org/oas/v3.1.2.html).
 
 ## License
 
-[MIT](LICENSE)
-
-Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), especially if you have a minimized false-positive or false-negative example from a real OpenAPI workflow.
+[MIT](LICENSE). Third-party components retain their own licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

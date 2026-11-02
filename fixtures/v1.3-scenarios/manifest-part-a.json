@@ -1,0 +1,472 @@
+[
+  {
+    "id": "commerce-checkout",
+    "title": "电商结算与订单追踪",
+    "scenario": "同步提高结算校验门槛并调整订单输出；结算创建和订单查询共享外部订单模型，验证请求/响应方向、多操作传播与幂等参数来源。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "parameters/idempotency-key.json",
+        "parameters/order-id.json",
+        "request-bodies/checkout.json",
+        "schemas/checkout-request.json",
+        "responses/order-created.json",
+        "responses/order-ok.json",
+        "schemas/order.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "parameters/idempotency-key.json",
+        "parameters/order-id.json",
+        "request-bodies/checkout.json",
+        "schemas/checkout-request.json",
+        "responses/order-created.json",
+        "responses/order-ok.json",
+        "schemas/order.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "PARAMETER_REQUIRED",
+          "severity": "breaking",
+          "location": "paths[\"/checkouts\"].post.parameters.header[\"Idempotency-Key\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "severity": "breaking",
+          "location": "paths[\"/checkouts\"].post.requestBody.content[\"application/json\"].schema.properties[\"currency\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/checkouts\"].post.requestBody.content[\"application/json\"].schema.properties[\"amountMinor\"].minimum"
+        },
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "severity": "breaking",
+          "location": "paths[\"/checkouts\"].post.responses[\"201\"].content[\"application/json\"].schema.properties[\"id\"].type"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/checkouts\"].post.responses[\"201\"].content[\"application/json\"].schema.properties[\"status\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "severity": "breaking",
+          "location": "paths[\"/orders/{orderId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"id\"].type"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/orders/{orderId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].enum"
+        }
+      ],
+      "counterexamples": [
+        {
+          "change": "不再接受 EUR 结算",
+          "oldInteraction": "POST /checkouts，header Idempotency-Key:k-1，body {\"cartId\":\"c-1\",\"currency\":\"EUR\",\"amountMinor\":1000}",
+          "why": "旧请求满足所有要求，候选移除 EUR 后会被拒绝。"
+        },
+        {
+          "change": "最低结算金额由 1 提高到 100",
+          "oldInteraction": "POST /checkouts，header Idempotency-Key:k-2，body {\"cartId\":\"c-2\",\"currency\":\"USD\",\"amountMinor\":50}",
+          "why": "50 是旧下限内的合法值，但不满足候选 minimum=100。"
+        },
+        {
+          "change": "幂等 header 从可选变必填",
+          "oldInteraction": "POST /checkouts，不提供 Idempotency-Key，body {\"cartId\":\"c-3\",\"currency\":\"CNY\",\"amountMinor\":500}",
+          "why": "旧契约允许省略该 header；候选会拒绝原本合法的调用。"
+        },
+        {
+          "change": "订单 id 的 JSON 类型改变并传播到两个端点",
+          "oldInteraction": "旧创建响应和 GET /orders/ord-1001 均返回 {\"id\":\"ord-1001\",\"status\":\"paid\",\"amountMinor\":500}，客户端按字符串读取 id",
+          "why": "新契约要求整数 id，旧 SDK 的字符串反序列化与字符串标识处理可能失败。"
+        },
+        {
+          "change": "订单状态新增 refunded",
+          "oldInteraction": "旧客户端针对 status 只处理 pending 与 paid；新响应可以是 {\"id\":1001,\"status\":\"refunded\",\"amountMinor\":500}",
+          "why": "新输出值超出旧枚举，穷举分支可能无法处理；引擎以 potentially-breaking 提醒复核。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "健康探针及其外部响应/模型未变化，不应产生 finding。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "PARAMETER_REQUIRED",
+          "locationIncludes": "parameters.header[\"Idempotency-Key\"]",
+          "old": {
+            "file": "parameters/idempotency-key.json",
+            "pointer": "#/required"
+          },
+          "new": {
+            "file": "parameters/idempotency-key.json",
+            "pointer": "#/required"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "locationIncludes": "properties[\"currency\"].enum",
+          "old": {
+            "file": "schemas/checkout-request.json",
+            "pointer": "#/properties/currency/enum"
+          },
+          "new": {
+            "file": "schemas/checkout-request.json",
+            "pointer": "#/properties/currency/enum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "locationIncludes": "paths[\"/checkouts\"].post.responses",
+          "old": {
+            "file": "schemas/order.json",
+            "pointer": "#/properties/id/type"
+          },
+          "new": {
+            "file": "schemas/order.json",
+            "pointer": "#/properties/id/type"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "catalog-pagination",
+    "title": "商品目录检索与游标分页",
+    "scenario": "列表查询同步调整数组参数编码、分页容量与游标输出；详情和列表共享商品模型，并保留字段定义但撤销 sku 的响应必需保证，验证虚拟参数位置和嵌套数组模型。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "parameters/catalog.json",
+        "parameters/product-id.json",
+        "responses/product-page.json",
+        "responses/product.json",
+        "schemas/product-page.json",
+        "schemas/product.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "parameters/catalog.json",
+        "parameters/product-id.json",
+        "responses/product-page.json",
+        "responses/product.json",
+        "schemas/product-page.json",
+        "schemas/product.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "PARAMETER_SERIALIZATION_CHANGED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/catalog/products\"].get.parameters.query[\"tags\"].serialization"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/catalog/products\"].get.parameters.query[\"pageSize\"].schema.maximum"
+        },
+        {
+          "ruleId": "PARAMETER_ADDED_OPTIONAL",
+          "severity": "non-breaking",
+          "location": "paths[\"/catalog/products\"].get.parameters.query[\"includeArchived\"]"
+        },
+        {
+          "ruleId": "RESPONSE_HEADER_REMOVED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/catalog/products\"].get.responses[\"200\"].headers[\"X-Next-Cursor\"]"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/catalog/products\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"items\"].items.properties[\"sku\"].required"
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/catalog/products/{productId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"sku\"].required"
+        }
+      ],
+      "counterexamples": [
+        {
+          "change": "数组 query 编码从重复键改为逗号拼接",
+          "oldInteraction": "GET /catalog/products?tags=red&tags=sale&pageSize=20",
+          "why": "旧 form+explode=true 的重复参数编码，候选 explode=false 要求 tags=red,sale；现有 SDK 可能继续发送旧格式，需保守复核。"
+        },
+        {
+          "change": "pageSize 上限从 100 收紧到 50",
+          "oldInteraction": "GET /catalog/products?pageSize=80",
+          "why": "80 以前合法，候选不再接受，属于确定的请求输入破坏。"
+        },
+        {
+          "change": "移除 X-Next-Cursor 响应头",
+          "oldInteraction": "GET /catalog/products 返回 header X-Next-Cursor:after-100，旧客户端据此请求下一页",
+          "why": "依赖响应头推进游标的客户端可能停留在第一页；没有消费者证据时提示 potentially-breaking。"
+        },
+        {
+          "change": "商品 sku 不再保证存在",
+          "oldInteraction": "旧列表 {\"items\":[{\"id\":\"p-1\",\"name\":\"Desk\",\"sku\":\"DESK-1\"}]} 与详情响应都保证 sku，客户端直接访问该字段",
+          "why": "新响应可以省略 sku，即使属性 schema 仍保留，旧客户端的非空假设也会失效；共享模型应在两个操作位置检出。"
+        },
+        {
+          "change": "新增可选 includeArchived 查询条件",
+          "oldInteraction": "GET /catalog/products?pageSize=20，不传 includeArchived",
+          "why": "可选参数不会要求旧客户端新增数据，该变更应为 non-breaking，不能把所有同步变更都判为 breaking。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "探针端点的 schema 和调用方式保持不变。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "parameters.query[\"pageSize\"]",
+          "old": {
+            "file": "parameters/catalog.json",
+            "pointer": "#/PageSize/schema/maximum"
+          },
+          "new": {
+            "file": "parameters/catalog.json",
+            "pointer": "#/PageSize/schema/maximum"
+          }
+        },
+        {
+          "ruleId": "PARAMETER_SERIALIZATION_CHANGED",
+          "locationIncludes": "parameters.query[\"tags\"]",
+          "old": {
+            "file": "parameters/catalog.json",
+            "pointer": "#/Tags"
+          },
+          "new": {
+            "file": "parameters/catalog.json",
+            "pointer": "#/Tags"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_REQUIRED_PROPERTY_REMOVED",
+          "locationIncludes": "paths[\"/catalog/products\"].get",
+          "old": {
+            "file": "schemas/product.json",
+            "pointer": "#/properties/sku"
+          },
+          "new": {
+            "file": "schemas/product.json",
+            "pointer": "#/properties/sku"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "batch-jobs",
+    "title": "批处理提交、任务轮询与结果交付",
+    "scenario": "一次版本调整涉及可选 body 变必填、提交媒体迁移、批量容量降低、202→201 状态码迁移、新任务状态和结果数组范围扩大；健康探针不变，验证多操作及请求/响应相反包含方向。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "request-bodies/submit.json",
+        "schemas/submit.json",
+        "schemas/task.json",
+        "responses/job-state.json",
+        "schemas/job.json",
+        "parameters/job-id.json",
+        "responses/results.json",
+        "schemas/results.json",
+        "schemas/result-item.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "request-bodies/submit.json",
+        "schemas/submit.json",
+        "schemas/task.json",
+        "responses/job-state.json",
+        "schemas/job.json",
+        "parameters/job-id.json",
+        "responses/results.json",
+        "schemas/results.json",
+        "schemas/result-item.json",
+        "responses/health.json",
+        "schemas/health.json"
+      ]
+    },
+    "expect": {
+      "compatible": false,
+      "coverage": "complete",
+      "findings": [
+        {
+          "ruleId": "REQUEST_BODY_REQUIRED",
+          "severity": "breaking",
+          "location": "paths[\"/jobs\"].post.requestBody.required"
+        },
+        {
+          "ruleId": "REQUEST_MEDIA_TYPE_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/jobs\"].post.requestBody.content[\"application/x-ndjson\"]"
+        },
+        {
+          "ruleId": "REQUEST_MEDIA_TYPE_ADDED",
+          "severity": "non-breaking",
+          "location": "paths[\"/jobs\"].post.requestBody.content[\"application/cbor\"]"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking",
+          "location": "paths[\"/jobs\"].post.requestBody.content[\"application/json\"].schema.properties[\"tasks\"].maxItems"
+        },
+        {
+          "ruleId": "RESPONSE_STATUS_REMOVED",
+          "severity": "breaking",
+          "location": "paths[\"/jobs\"].post.responses[\"202\"]"
+        },
+        {
+          "ruleId": "RESPONSE_STATUS_ADDED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/jobs\"].post.responses[\"201\"]"
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/jobs/{jobId}\"].get.responses[\"200\"].content[\"application/json\"].schema.properties[\"status\"].enum"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/jobs/{jobId}/results\"].get.responses[\"200\"].content[\"application/json\"].schema.minItems"
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "potentially-breaking",
+          "location": "paths[\"/jobs/{jobId}/results\"].get.responses[\"200\"].content[\"application/json\"].schema.maxItems"
+        }
+      ],
+      "counterexamples": [
+        {
+          "change": "提交 body 从可选改为必填",
+          "oldInteraction": "POST /jobs，不提供 body",
+          "why": "旧契约允许服务端从默认任务源建立批次；候选必须提供内容，使该旧调用失效。"
+        },
+        {
+          "change": "停止接受 NDJSON，新增 CBOR",
+          "oldInteraction": "POST /jobs，Content-Type: application/x-ndjson，body 为多行 {\"taskId\":\"t-1\",\"input\":\"a\"}",
+          "why": "旧 NDJSON 调用方会失去已支持的媒体类型；新增 CBOR 是兼容性扩展，但不能抵消旧媒体被移除的破坏。"
+        },
+        {
+          "change": "JSON 批量任务上限从 100 降到 25",
+          "oldInteraction": "POST /jobs，Content-Type: application/json，body {\"tasks\":[30 个具有 taskId/input 的任务]}",
+          "why": "30 个任务的旧合法输入会超过新 maxItems=25。"
+        },
+        {
+          "change": "创建任务成功状态从 202 改为 201",
+          "oldInteraction": "旧调用方仅将 HTTP 202 当作提交已受理，并据其响应读取任务 id",
+          "why": "202 保证被移除，同时新增 201 成功分支，旧 SDK 可能把新状态当作异常；两条状态变更都应保留。"
+        },
+        {
+          "change": "轮询结果新增 paused 状态",
+          "oldInteraction": "旧 GET /jobs/job-1 客户端只枚举 queued、running、completed；候选可返回 {\"id\":\"job-1\",\"status\":\"paused\"}",
+          "why": "旧穷举状态机可能没有暂停分支，以 potentially-breaking 提示人工检查。"
+        },
+        {
+          "change": "结果响应允许空数组",
+          "oldInteraction": "旧 GET /jobs/job-1/results 至少返回 [{\"taskId\":\"t-1\",\"output\":\"done\"}]，客户端直接读取 results[0]",
+          "why": "新 minItems=0 允许 []，扩大输出集合，旧消费者的非空假设可能失效。"
+        },
+        {
+          "change": "结果响应最大数量从 100 提高到 1000",
+          "oldInteraction": "旧 GET /jobs/job-1/results 的消费者按最多 100 条预分配缓冲区或限制单页渲染",
+          "why": "新 maxItems=1000 可产生旧约束之外的输出；响应端扩大范围需要保守复核，不能沿用请求扩容的 non-breaking 方向。"
+        }
+      ],
+      "controls": [
+        {
+          "locationPrefix": "paths[\"/health\"].get",
+          "reason": "系统探针不参与任务媒体、状态或数组改动，不应产生差异。"
+        }
+      ],
+      "sourceChecks": [
+        {
+          "ruleId": "REQUEST_BODY_REQUIRED",
+          "locationIncludes": "requestBody.required",
+          "old": {
+            "file": "request-bodies/submit.json",
+            "pointer": "#/required"
+          },
+          "new": {
+            "file": "request-bodies/submit.json",
+            "pointer": "#/required"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "properties[\"tasks\"].maxItems",
+          "old": {
+            "file": "schemas/submit.json",
+            "pointer": "#/properties/tasks/maxItems"
+          },
+          "new": {
+            "file": "schemas/submit.json",
+            "pointer": "#/properties/tasks/maxItems"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "locationIncludes": "paths[\"/jobs/{jobId}\"].get",
+          "old": {
+            "file": "schemas/job.json",
+            "pointer": "#/properties/status/enum"
+          },
+          "new": {
+            "file": "schemas/job.json",
+            "pointer": "#/properties/status/enum"
+          }
+        },
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "locationIncludes": "paths[\"/jobs/{jobId}/results\"].get.responses[\"200\"].content[\"application/json\"].schema.minItems",
+          "old": {
+            "file": "schemas/results.json",
+            "pointer": "#/minItems"
+          },
+          "new": {
+            "file": "schemas/results.json",
+            "pointer": "#/minItems"
+          }
+        }
+      ]
+    }
+  }
+]

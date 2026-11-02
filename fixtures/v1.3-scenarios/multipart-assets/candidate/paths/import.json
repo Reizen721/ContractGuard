@@ -1,0 +1,20 @@
+{
+  "post": {
+    "operationId": "importAsset",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "../schemas/import-request.json"
+          }
+        }
+      }
+    },
+    "responses": {
+      "202": {
+        "description": "Import queued"
+      }
+    }
+  }
+}

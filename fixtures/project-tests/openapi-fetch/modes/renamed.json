@@ -1,0 +1,6 @@
+{
+  "kind": "rename",
+  "path": "/posts/123",
+  "from": "title",
+  "to": "headline"
+}

@@ -1,0 +1,39 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ContractGuard complex identity-tenancy",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/members": {
+      "$ref": "./paths/members.json"
+    },
+    "/invitations": {
+      "$ref": "./paths/invitations.json"
+    },
+    "/sessions/{sessionId}": {
+      "$ref": "./paths/sessions.json"
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "Healthy"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth": {
+        "$ref": "./security/oauth.json"
+      },
+      "TenantKey": {
+        "$ref": "./security/tenant-key.json"
+      }
+    }
+  }
+}

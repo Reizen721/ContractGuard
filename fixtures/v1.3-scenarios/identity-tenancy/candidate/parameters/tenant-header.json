@@ -1,0 +1,9 @@
+{
+  "name": "X-Tenant-Id",
+  "in": "header",
+  "required": true,
+  "schema": {
+    "type": "string",
+    "minLength": 1
+  }
+}

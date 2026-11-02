@@ -1,0 +1,11 @@
+{
+  "name": "@contractguard/project", "version": "2.0.0", "private": true,
+  "description": "Trusted local project snapshots and existing-test migration evidence.",
+  "type": "module", "main": "./dist/index.js", "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "pnpm build && node --test tests/*.test.mjs" },
+  "dependencies": { "@contractguard/caller": "workspace:*", "@contractguard/core": "workspace:*", "vitest": "^3.2.4" },
+  "devDependencies": { "@types/node": "^24.3.0" },
+  "engines": { "node": ">=22.13" }
+}

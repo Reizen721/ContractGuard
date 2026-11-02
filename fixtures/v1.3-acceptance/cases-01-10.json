@@ -1,0 +1,303 @@
+[
+  {
+    "id": "case-01",
+    "title": "JSON/YAML 与属性顺序等价",
+    "scenario": "仅将 JSON 换成 YAML，并重排对象键与 properties 顺序；契约约束和响应内容保持相同。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.yaml",
+      "files": [
+        "openapi.yaml"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": true,
+      "findings": []
+    }
+  },
+  {
+    "id": "case-02",
+    "title": "删除端点及 HTTP 操作",
+    "scenario": "旧契约包含 GET /legacy、GET /orders 和 DELETE /orders；新契约删除 /legacy，并在保留 /orders 的同时删除 DELETE。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "PATH_REMOVED",
+          "severity": "breaking"
+        },
+        {
+          "ruleId": "OPERATION_REMOVED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-03",
+    "title": "新增必填查询参数",
+    "scenario": "GET /orders 新增必填 tenantId 查询参数，旧调用方不会自动提供该参数。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "PARAMETER_ADDED_REQUIRED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-04",
+    "title": "新增可选查询参数",
+    "scenario": "GET /orders 新增可选 pageToken 查询参数，既有请求仍然有效。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": true,
+      "findings": [
+        {
+          "ruleId": "PARAMETER_ADDED_OPTIONAL",
+          "severity": "non-breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-05",
+    "title": "删除响应中的必需属性",
+    "scenario": "GET /orders 原本保证返回 id；新响应同时移除 id 属性定义和必需保证，既有客户端会失去该字段。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_PROPERTY_REMOVED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-06",
+    "title": "收紧请求枚举",
+    "scenario": "POST /orders 原本接受 pending、paid、cancelled，候选契约不再接受 cancelled。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_ENUM_NARROWED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-07",
+    "title": "扩张响应枚举",
+    "scenario": "GET /orders 响应 status 新增 cancelled 值，可能影响按旧枚举穷举分支的客户端；仅 potential 不触发 breaking 兼容性布尔值。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": true,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_ENUM_WIDENED",
+          "severity": "potentially-breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-08",
+    "title": "提高请求数值下限",
+    "scenario": "POST /orders 的 quantity 最小值从 1 提高为 2；此前合法的 quantity=1 不再被接受。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_CONSTRAINT_TIGHTENED",
+          "severity": "breaking"
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-09",
+    "title": "跨文件响应字段类型变化",
+    "scenario": "入口的响应引用 schemas/order.json；被引用的 id 从 string 改成 integer，finding 应定位到模型文件的 type。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/order.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/order.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "severity": "breaking"
+        }
+      ],
+      "sourceLocations": [
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "old": {
+            "file": "schemas/order.json",
+            "pointer": "#/properties/id/type"
+          },
+          "new": {
+            "file": "schemas/order.json",
+            "pointer": "#/properties/id/type"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "case-10",
+    "title": "三文件传递引用与嵌套字段",
+    "scenario": "openapi.json 引用 order.json，order.json 再引用同目录 address.json；嵌套 postalCode 从 string 改成 integer，来源应指向第三个文件。",
+    "baseline": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/order.json",
+        "schemas/address.json"
+      ]
+    },
+    "candidate": {
+      "entry": "openapi.json",
+      "files": [
+        "openapi.json",
+        "schemas/order.json",
+        "schemas/address.json"
+      ]
+    },
+    "expect": {
+      "coverage": "complete",
+      "compatible": false,
+      "findings": [
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "severity": "breaking"
+        }
+      ],
+      "sourceLocations": [
+        {
+          "ruleId": "SCHEMA_TYPE_CHANGED",
+          "old": {
+            "file": "schemas/address.json",
+            "pointer": "#/properties/postalCode/type"
+          },
+          "new": {
+            "file": "schemas/address.json",
+            "pointer": "#/properties/postalCode/type"
+          }
+        }
+      ]
+    }
+  }
+]

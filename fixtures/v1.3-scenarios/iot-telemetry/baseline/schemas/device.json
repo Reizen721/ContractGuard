@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "status",
+    "children"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "online",
+        "offline"
+      ]
+    },
+    "children": {
+      "type": "array",
+      "items": {
+        "$ref": "./device.json"
+      }
+    }
+  }
+}

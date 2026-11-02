@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "sku"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    }
+  }
+}

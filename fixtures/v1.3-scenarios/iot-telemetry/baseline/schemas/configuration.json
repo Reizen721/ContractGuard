@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": [
+    "samplingIntervalSeconds",
+    "delivery"
+  ],
+  "properties": {
+    "samplingIntervalSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "delivery": {
+      "oneOf": [
+        {
+          "$ref": "./http-delivery.json"
+        },
+        {
+          "$ref": "./mqtt-delivery.json"
+        }
+      ]
+    }
+  }
+}
