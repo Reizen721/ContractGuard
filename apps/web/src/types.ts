@@ -225,6 +225,6 @@ export interface AiReviewReport {
   }
 }
 
-export type ViewName = 'analyze' | 'history' | 'agent' | 'callers'
+export type ViewName = 'analyze' | 'history' | 'agent' | 'callers' | 'cegar'
 export type SeverityFilter = 'all' | Severity
 export type ExportFormat = 'json' | 'markdown' | 'html'

@@ -116,7 +116,7 @@ test('portable plugin runs after copying to a different Unicode directory, with 
     assert.ok(listed.tools.some((tool) => tool.name === 'contractguard_status'));
     assert.ok(listed.tools.some((tool) => tool.name === 'contractguard_analyze'));
     assert.ok(listed.tools.some((tool) => tool.name === 'contractguard_review_callers'));
-    assert.ok(listed.tools.some((tool) => tool.name === 'contractguard_export_caller_review'));
+    assert.ok(listed.tools.some((tool) => tool.name === 'contractguard_run_cegar'));
     const status = await client.callTool({ name: 'contractguard_status', arguments: {} });
     assert.notEqual(status.isError, true);
     assert.ok(status.content.some((content) => content.type === 'text' && content.text.includes('contractguard')));

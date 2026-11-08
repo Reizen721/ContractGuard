@@ -330,7 +330,6 @@ onBeforeUnmount(() => {
       <div class="ai-title-block">
         <div>
           <h2 id="ai-interpreter-title">AI 报告解读 <span>可选</span></h2>
-          <p>基于规则结果生成风险摘要、迁移步骤和测试建议，不影响兼容性结论。</p>
         </div>
       </div>
       <span class="ai-status" :class="`ai-status--${statusTone}`" role="status" aria-live="polite">
@@ -340,7 +339,7 @@ onBeforeUnmount(() => {
 
     <div v-if="statusLoading" class="ai-state-card" aria-busy="true" aria-live="polite">
       <span class="spinner"></span>
-      <div><strong>正在读取 AI 服务配置</strong><p>这不会发起模型请求，也不会发送分析数据。</p></div>
+      <div><strong>正在读取 AI 服务配置</strong></div>
     </div>
 
     <div v-else-if="statusError" class="ai-state-card ai-state-card--error" role="alert">
@@ -354,8 +353,7 @@ onBeforeUnmount(() => {
       <div>
         <strong>{{ status?.enabled ? (serviceConfigured ? 'AI 服务暂不可用' : '还差一步：配置 AI 服务') : 'AI 解释器当前未启用' }}</strong>
         <p v-if="status?.reason">{{ status.reason }}</p>
-        <p v-else>请在 API 服务端启用 AI 功能并配置至少一个模型服务，重启后即可使用。</p>
-        <small>密钥只保存在服务端，浏览器不会读取或保存 API Key。</small>
+        <p v-else>请在服务端启用 AI 功能并配置模型服务。</p>
       </div>
       <button class="button button--quiet button--small" type="button" @click="loadStatus">重新检测</button>
     </div>
@@ -373,10 +371,8 @@ onBeforeUnmount(() => {
             @input="updateFocus"
             maxlength="500"
             rows="3"
-            aria-describedby="ai-focus-hint"
             placeholder="例如：重点评估移动端 v1 客户端的升级成本，以及无停机迁移方案。"
           ></textarea>
-          <p id="ai-focus-hint">仅发送裁剪后的规则结果及此关注点；请勿填写密钥、个人信息或其他敏感数据。</p>
         </div>
         <div class="ai-generate-action">
           <label v-if="hasProviderProfiles" for="ai-provider-select">模型服务</label>
@@ -441,8 +437,7 @@ onBeforeUnmount(() => {
           </div>
           <h3 id="ai-report-headline">{{ report.overview.headline }}</h3>
           <p>{{ report.overview.executiveSummary }}</p>
-          <p class="ai-evidence-note">AI 风险等级与建议属于解释，不是规则门禁结论。消费者影响是待验证的推测，不代表已检查真实客户端。</p>
-          <p v-if="report.coverage" class="ai-evidence-note">解释输入覆盖 {{ report.coverage.includedFindings }} / {{ report.coverage.totalFindings }} 条变更；{{ report.coverage.omittedFindings }} 条未发送给模型。引用已校验为本次输入中的变更，但不代表每条解释都正确。</p>
+          <p v-if="report.coverage" class="ai-evidence-note">解释输入覆盖 {{ report.coverage.includedFindings }} / {{ report.coverage.totalFindings }} 条变更；{{ report.coverage.omittedFindings }} 条未发送给模型。</p>
           <p v-if="report.focus" class="ai-evidence-note">此报告关注点：{{ report.focus }}</p>
           <div v-if="report.id" class="ai-export-actions">
             <span>已保存，可在历史报告中重开</span>

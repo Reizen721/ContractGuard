@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-43853d.svg)](package.json)
 
-ContractGuard is a local API change review workbench and MCP plugin. It combines OpenAPI compatibility findings, TypeScript caller evidence, migration proposals and existing project tests in a saved review. Use it in a browser, from the command line, or through an MCP-capable agent.
+ContractGuard is a local OpenAPI compatibility workbench, Neuro-Symbolic CEGAR caller self-repair agent, and MCP plugin. It combines OpenAPI 3.0/3.1 diffing, inter-procedural `ts.TypeChecker` program slicing, hybrid AST/LLM patch synthesis, and an airgapped 4-gate verification sandbox (strict typechecking, unit tests, outbound request contracts, and differential adversarial witness fuzzing) in saved, auditable records. Use it in a browser, from the CLI, or through an MCP-capable Coding Agent.
 
 An optional LLM can plan the review and explain findings. Checks and the release gate remain deterministic.
 
@@ -78,7 +78,7 @@ Try this after registering the demo:
 
 > Use ContractGuard to list projects, then review `orders-migration` in workflow mode. Wait for completion. Explain the contract risks, affected callers and baseline/candidate/patched test results with evidence IDs. Show the proposed migration without modifying my source files.
 
-The **19 MCP tools** cover analysis, saved AI explanations, project discovery, Agent reviews, caller migration, history, cancellation and report export. Web and MCP share records when connected to the same service. See the [host installation guide](docs/v2.0-user-guide.md#6-在-codexantigravity-或其他-agent-中使用).
+The **19 MCP tools** cover static compatibility analysis, AI risk explanation, project discovery, release reviews, multi-round CEGAR caller self-repair (`contractguard_run_cegar` / `get_cegar_run` / `list_cegar_runs` / `export_cegar_run`), lightweight AST replay, cancellation, and chunked report export. Web and MCP share records when connected to the same service. See the [host installation guide](docs/v2.0-user-guide.md#6-在-codexantigravity-或其他-agent-中使用).
 
 ## Optional DeepSeek planning
 
@@ -108,6 +108,10 @@ pnpm contractguard compare fixtures/multifile/baseline/openapi.yaml fixtures/mul
 # Native rules, caller evidence and existing project tests
 pnpm contractguard review-project orders-migration --registry fixtures/project-tests/demo-registry.json --format json --fail-on never
 
+# Multi-round Neuro-Symbolic CEGAR caller self-repair & 24-case benchmark
+pnpm contractguard cegar --preset preset-nested-nullable
+pnpm benchmark:cegar
+
 # Official engine CLI passthrough
 pnpm contractguard oasdiff --help
 ```
@@ -133,6 +137,7 @@ The upstream engine is **official oasdiff 1.35.0**, pinned and attributed. Nativ
 | Integration and development | [HTTP API](docs/api-reference.md) · [Architecture](docs/architecture.md) · [Development](docs/development.md) |
 | Rules and implementation limits | [Native rules](docs/compatibility-rules.md) · [Caller migration](docs/v1.7-caller-migration.md) · [Project runner](docs/v1.8-project-agent.md) |
 | Evidence | [2.0 verification](docs/v2.0-verification.md) · [Verification history](docs/verification.md) · [Public-project benchmark](docs/v1.8-benchmark.md) · [Prior real DeepSeek acceptance](docs/v1.8-deepseek-acceptance.md) |
+| Neuro-Symbolic CEGAR Agent & Benchmark | [CEGAR Architecture](docs/CEGAR_AGENT_ARCHITECTURE.md) · [ContractBench Report](benchmarks/contractbench/REPORT.md) |
 | Deliverables | [Delivery checklist](docs/delivery-checklist.md) |
 
 `pnpm check` runs builds, type checks, tests and cross-entry regressions. Live DeepSeek acceptance is opt-in, outside the default model-free suite. Historical evidence is labelled by the version actually tested.

@@ -1,0 +1,681 @@
+{
+  "summary": {
+    "benchmark": "ContractBench v1.0",
+    "generatedAt": "2026-11-08T08:08:58.809Z",
+    "totalCases": 24,
+    "regressionCases": 22,
+    "unreachableControlCases": 2,
+    "totalDurationMs": 122483,
+    "avgSliceTokenReductionPct": 43.5,
+    "totalAdversarialWitnessesSynthesized": 10,
+    "systems": {
+      "staticOnly": {
+        "label": "Static Diff Only (oasdiff / Core)",
+        "verifiedPatchAt1": 0,
+        "verifiedPatchAtK": 0,
+        "verifiedRateAtK": "0.0%",
+        "unreachableFalseAlarms": 2,
+        "falseAlarmPruningRate": "0.0%",
+        "unsafePassCount": 0,
+        "unsafePassRate": "0.0%"
+      },
+      "legacyFlat": {
+        "label": "Legacy 1-Shot Flat Rename",
+        "verifiedPatchAt1": 0,
+        "verifiedPatchAtK": 0,
+        "verifiedRateAtK": "0.0%",
+        "unreachableFalseAlarms": 2,
+        "falseAlarmPruningRate": "0.0%",
+        "unsafePassCount": 0,
+        "unsafePassRate": "0.0%"
+      },
+      "ablationNoAdversarial": {
+        "label": "Ablation: CEGAR w/o Gate 4 Adversarial Witnesses",
+        "verifiedPatchAt1": 14,
+        "verifiedPatchAtK": 14,
+        "verifiedRateAtK": "63.6%",
+        "unreachableFalseAlarms": 0,
+        "falseAlarmPruningRate": "100.0%",
+        "unsafePassCount": 8,
+        "unsafePassRate": "36.4%"
+      },
+      "cegarFull": {
+        "label": "ContractGuard CEGAR (Full 4-Gate + Multi-Round)",
+        "verifiedPatchAt1": 14,
+        "verifiedPatchAtK": 22,
+        "verifiedRateAt1": "63.6%",
+        "verifiedRateAtK": "100.0%",
+        "unreachableFalseAlarms": 0,
+        "falseAlarmPruningRate": "100.0%",
+        "unsafePassCount": 0,
+        "unsafePassRate": "0.0%"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "CB-01",
+      "category": "RENAME",
+      "name": "Direct property rename with TypeScript DTO interface",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 38.8,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4351
+    },
+    {
+      "id": "CB-02",
+      "category": "RENAME",
+      "name": "Object destructuring binding rename",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 42,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4704
+    },
+    {
+      "id": "CB-03",
+      "category": "RENAME",
+      "name": "Control #1: Unreachable removed response fields (single-file)",
+      "isUnreachableControl": true,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 40.3,
+      "staticBreakingCount": 2,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": true,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "unreachable-breaking-safe",
+        "rounds": 0,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 2689
+    },
+    {
+      "id": "CB-04",
+      "category": "RENAME",
+      "name": "Control #2: Unreachable removed field across 2-file wrapper",
+      "isUnreachableControl": true,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 51.7,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": true,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "unreachable-breaking-safe",
+        "rounds": 0,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 2717
+    },
+    {
+      "id": "CB-05",
+      "category": "STRUCTURAL",
+      "name": "Property nesting (postalCode -> location.postalCode)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 39.9,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4855
+    },
+    {
+      "id": "CB-06",
+      "category": "STRUCTURAL",
+      "name": "Property flattening (author.handle -> authorHandle)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 39.4,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 5144
+    },
+    {
+      "id": "CB-07",
+      "category": "STRUCTURAL",
+      "name": "Pagination envelope wrap (Order[] -> { items: Order[], total })",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 39.9,
+      "staticBreakingCount": 2,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4993
+    },
+    {
+      "id": "CB-08",
+      "category": "STRUCTURAL",
+      "name": "3-file inter-procedural wrapper chain (userName -> profile.displayName)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 58.5,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4887
+    },
+    {
+      "id": "CB-09",
+      "category": "TYPE_SHIFT",
+      "name": "Monetary integer cents -> decimal string (amountCents -> amountDecimal)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 41.1,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4705
+    },
+    {
+      "id": "CB-10",
+      "category": "TYPE_SHIFT",
+      "name": "Unix epoch seconds -> ISO-8601 date-time string",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 42,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4881
+    },
+    {
+      "id": "CB-11",
+      "category": "TYPE_SHIFT",
+      "name": "Numeric latency -> string numeric representation in arithmetic expression",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 39,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4608
+    },
+    {
+      "id": "CB-12",
+      "category": "TYPE_SHIFT",
+      "name": "Boolean flag -> lifecycle enum (isArchived: boolean -> archiveState: ACTIVE|ARCHIVED)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 41.1,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4562
+    },
+    {
+      "id": "CB-13",
+      "category": "NULLABILITY",
+      "name": "Structural nest + nullable container (reviewerName -> reviewer?.name | null)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 42.4,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 6306
+    },
+    {
+      "id": "CB-14",
+      "category": "NULLABILITY",
+      "name": "Required string -> optional omitted property (couponCode WIT-OPT)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 40.3,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 5516
+    },
+    {
+      "id": "CB-15",
+      "category": "NULLABILITY",
+      "name": "Field rename + newly nullable number calling .toFixed(2) (WIT-NULL)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 40.7,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 6036
+    },
+    {
+      "id": "CB-16",
+      "category": "NULLABILITY",
+      "name": "Array minItems relaxation (minItems: 1 -> 0) indexing head element [0] (WIT-EMPTY)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 40.3,
+      "staticBreakingCount": 0,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 5459
+    },
+    {
+      "id": "CB-17",
+      "category": "ENUM_EXT",
+      "name": "Enum rename + new variant crashing exhaustive switch default throw (WIT-ENUM)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 2,
+      "sliceCompressionPct": 54.1,
+      "staticBreakingCount": 0,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 7428
+    },
+    {
+      "id": "CB-18",
+      "category": "ENUM_EXT",
+      "name": "New payment rail enum variant crashing dictionary lookup .toFixed(2) (WIT-ENUM)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 36.3,
+      "staticBreakingCount": 0,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 6058
+    },
+    {
+      "id": "CB-19",
+      "category": "ENUM_EXT",
+      "name": "Numeric return-type switch with renamed + extended priority enum (TypeChecker fallback 0)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 2,
+      "sliceCompressionPct": 50.6,
+      "staticBreakingCount": 0,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 7471
+    },
+    {
+      "id": "CB-20",
+      "category": "ENUM_EXT",
+      "name": "2-file client wrapper + extended review verdict enum (WIT-ENUM)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 1,
+      "sliceCompressionPct": 60.1,
+      "staticBreakingCount": 0,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": false,
+        "unsafePass": true
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 2,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": false,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 6018
+    },
+    {
+      "id": "CB-21",
+      "category": "REQUEST_TIGHTEN",
+      "name": "Newly required query parameter (apiVersion=2026-11)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 37.6,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4763
+    },
+    {
+      "id": "CB-22",
+      "category": "REQUEST_TIGHTEN",
+      "name": "Query parameter rename + maximum bound clamping (limit=50 -> pageSize=20)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 37.1,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4926
+    },
+    {
+      "id": "CB-23",
+      "category": "REQUEST_TIGHTEN",
+      "name": "Newly required HTTP request header (x-tenant-region)",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 39.4,
+      "staticBreakingCount": 1,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4647
+    },
+    {
+      "id": "CB-24",
+      "category": "REQUEST_TIGHTEN",
+      "name": "POST JSON request body property rename + response property rename",
+      "isUnreachableControl": false,
+      "adversarialWitnesses": 0,
+      "sliceCompressionPct": 50.9,
+      "staticBreakingCount": 3,
+      "staticFlaggedBreaking": true,
+      "legacyVerified": false,
+      "ablationNoAdv": {
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false
+      },
+      "cegarFull": {
+        "callerImpactStatus": "regression-repaired-verified",
+        "rounds": 1,
+        "claimedSafe": true,
+        "trulyVerified": true,
+        "unsafePass": false,
+        "verifiedAt1": true,
+        "verifiedAtK": true
+      },
+      "elapsedMs": 4752
+    }
+  ]
+}

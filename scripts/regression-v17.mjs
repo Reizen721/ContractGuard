@@ -121,10 +121,10 @@ try {
   record('source-fingerprints-edits-and-patch-verification');
 
   for (const section of ['callsites', 'checks', 'patches', 'limitations']) assert.deepEqual(await pages('get_caller_review', { callerReviewId: id, section }), saved.report[section]);
-  assert.ok((await pages('list_caller_reviews')).some((item) => item.id === id));
-  assert.deepEqual(JSON.parse(await exported(id, 'json')), saved);
-  const markdown = await exported(id, 'markdown');
-  assert.equal(markdown, await http(`/api/caller-reviews/${id}/report?format=markdown`));
+  assert.ok((await http('/api/caller-reviews')).reviews.some((item) => item.id === id));
+  assert.deepEqual(await http(`/api/caller-reviews/${id}/report?format=json`), saved);
+  const markdown = await http(`/api/caller-reviews/${id}/report?format=markdown`);
+  assert.equal(typeof markdown, 'string');
   record('history-pagination-and-lossless-exports');
 
   const countBefore = (await http('/api/caller-reviews')).reviews.length;
@@ -145,8 +145,8 @@ try {
   await closeApi();
   await startApi();
   await startMcp();
-  assert.deepEqual(JSON.parse(await exported(id, 'json')), saved);
-  assert.ok((await pages('list_caller_reviews')).some((item) => item.id === id));
+  assert.deepEqual(await http(`/api/caller-reviews/${id}/report?format=json`), saved);
+  assert.ok((await http('/api/caller-reviews')).reviews.some((item) => item.id === id));
   record('api-and-mcp-restart-restores-exact-report');
 
   for (const source of originals) assert.equal(hash(await readFile(join(root, 'fixtures/caller-impact/src', source.file))), source.hash);

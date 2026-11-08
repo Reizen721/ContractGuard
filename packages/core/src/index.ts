@@ -12,6 +12,28 @@ export { prepareContract, locateContractSource, type PreparedContract } from "./
 export { parseOpenApi, resolveLocalRef, resolveNode } from "./parser.js";
 export { DEFAULT_RULE_POLICY, DEFAULT_SCORING_WEIGHTS, resolveRulePolicy, validateRulePolicy } from "./policy.js";
 export { getRule, ruleCatalog } from "./rules.js";
+export {
+  collectSchemaProperties,
+  extractSchemaBaseType,
+  inferSchemaMigrations,
+  normalizeEffectiveSchema,
+  type MigrationHypothesisKind,
+  type OperationSchemaDiff,
+  type ParameterDescriptor,
+  type PropertyDescriptor,
+  type SchemaAlignmentReport,
+  type SchemaMigrationHypothesis,
+} from "./schema-align.js";
+export {
+  synthesizeDifferentialWitnesses,
+  synthesizeSchemaValue,
+  validateOutboundRequest,
+  type ContractWitness,
+  type OperationWitnessSuite,
+  type OutboundRequestCapture,
+  type OutboundRequestValidation,
+  type WitnessKind,
+} from "./witness.js";
 export type {
   AnalysisResult,
   AnalysisCoverage,

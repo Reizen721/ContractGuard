@@ -1,7 +1,7 @@
 {
   "name": "contractguard",
   "version": "2.0.0",
-  "description": "Local OpenAPI compatibility analysis, consumer-aware reviews, and shared report history.",
+  "description": "Local OpenAPI compatibility analysis, release reviews, and 4-gate CEGAR caller self-repair.",
   "author": { "name": "Reizen721", "url": "https://github.com/Reizen721" },
   "homepage": "https://github.com/Reizen721/ContractGuard",
   "repository": "https://github.com/Reizen721/ContractGuard",
@@ -11,8 +11,8 @@
   "requires_local_executor": true,
   "interface": {
     "displayName": "ContractGuard",
-    "shortDescription": "API compatibility analysis, reviews, and history",
-    "longDescription": "Analyze OpenAPI contracts and submitted consumer evidence through your running local ContractGuard service. Retrieve shared analysis history and evidence-linked review reports.",
+    "shortDescription": "OpenAPI diff, release review, and CEGAR self-repair",
+    "longDescription": "Compare OpenAPI specs, run 3-phase project reviews, and synthesize 4-gate verified TypeScript caller patches through your local ContractGuard service.",
     "developerName": "Reizen721",
     "websiteURL": "https://github.com/Reizen721/ContractGuard",
     "category": "Developer Tools",

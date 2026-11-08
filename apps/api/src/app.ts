@@ -24,6 +24,7 @@ import { AnalysisStore } from './store.js';
 import type { ApiErrorBody, StoredAnalysis } from './types.js';
 import { createAgentRouter } from './agent/router.js';
 import { createCallerRouter } from './caller/router.js';
+import { createCegarRouter } from './cegar/router.js';
 
 export interface AppOptions {
   dataDirectory?: string;
@@ -88,6 +89,14 @@ export function createApp(options: AppOptions = {}): Express {
     ...(options.projectConfigPath === undefined ? {} : { projectConfigPath: options.projectConfigPath }),
     onManager: (manager) => { app.locals.closeAgent = () => manager.close(); },
     ...(options.oasdiffPath === undefined ? {} : { oasdiffPath: options.oasdiffPath }),
+    ...(options.aiConfig === undefined ? {} : { aiConfig: options.aiConfig }),
+    ...(options.aiRuntimeConfig === undefined ? {} : { aiRuntimeConfig: options.aiRuntimeConfig }),
+    ...(options.aiConfigPath === undefined ? {} : { aiConfigPath: options.aiConfigPath }),
+    ...(options.aiEnvironment === undefined ? {} : { aiEnvironment: options.aiEnvironment }),
+    ...(options.aiFetch === undefined ? {} : { aiFetch: options.aiFetch }),
+  }));
+  app.use('/api/cegar', createCegarRouter({
+    dataDirectory: join(dataDirectory, 'cegar-runs'),
     ...(options.aiConfig === undefined ? {} : { aiConfig: options.aiConfig }),
     ...(options.aiRuntimeConfig === undefined ? {} : { aiRuntimeConfig: options.aiRuntimeConfig }),
     ...(options.aiConfigPath === undefined ? {} : { aiConfigPath: options.aiConfigPath }),

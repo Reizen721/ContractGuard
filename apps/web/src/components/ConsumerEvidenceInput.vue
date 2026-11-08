@@ -59,22 +59,20 @@ async function importFile(event: Event): Promise<void> {
     <div class="consumer-input__heading">
       <div>
         <h3 id="consumer-input-title">调用方样例 <span>可选</span></h3>
-        <p id="consumer-input-help">加入调用方的请求样例、升级前后响应和读取约束，验证具体交互是否出现回归。仅检查提交的样例，不请求实际接口。</p>
       </div>
-      <button class="text-button" type="button" @click="emit('demo')">载入调用方示例</button>
-    </div>
-    <div class="consumer-input__actions">
-      <button class="button button--quiet" type="button" @click="fileInput?.click()">{{ reading ? '重新选择文件' : '导入样例 JSON' }}</button>
-      <button class="text-button" type="button" :aria-expanded="expanded" aria-controls="consumer-evidence-editor" @click="expanded = !expanded">{{ expanded ? '收起输入' : '粘贴或编辑 JSON' }}</button>
-      <button v-if="modelValue || reading || fileError" class="text-button" type="button" @click="clear">清空调用方样例</button>
-      <span v-if="reading" role="status">正在读取样例…</span>
-      <span v-else-if="modelValue && !error">已附加样例；运行分析时检查内容</span>
-      <input ref="fileInput" class="sr-only" type="file" accept=".json,application/json" aria-label="导入调用方样例 JSON" @change="importFile" />
+      <div class="consumer-input__actions">
+        <button class="button button--quiet button--small" type="button" @click="fileInput?.click()">{{ reading ? '重新选择文件' : '导入样例 JSON' }}</button>
+        <button class="text-button" type="button" :aria-expanded="expanded" aria-controls="consumer-evidence-editor" @click="expanded = !expanded">{{ expanded ? '收起输入' : '粘贴或编辑 JSON' }}</button>
+        <button class="text-button" type="button" @click="emit('demo')">载入调用方示例</button>
+        <button v-if="modelValue || reading || fileError" class="text-button danger-text" type="button" @click="clear">清空调用方样例</button>
+        <span v-if="reading" role="status">正在读取样例…</span>
+        <span v-else-if="modelValue && !error" class="consumer-ready-pill">已附加样例</span>
+        <input ref="fileInput" class="sr-only" type="file" accept=".json,application/json" aria-label="导入调用方样例 JSON" @change="importFile" />
+      </div>
     </div>
     <div v-show="expanded" id="consumer-evidence-editor">
       <label class="sr-only" for="consumer-evidence-json">调用方样例 JSON</label>
-      <textarea id="consumer-evidence-json" :value="modelValue" :aria-invalid="Boolean(error)" aria-describedby="consumer-input-help consumer-input-note consumer-input-error" spellcheck="false" placeholder="粘贴 schemaVersion 为 1 的调用方样例 JSON，或载入完整示例。" @input="edit" />
-      <p id="consumer-input-note">最多 1 MiB。请先脱敏。样例内容只用于本次本地验证；保存的报告包含结果和指纹。</p>
+      <textarea id="consumer-evidence-json" :value="modelValue" :aria-invalid="Boolean(error)" aria-describedby="consumer-input-error" spellcheck="false" placeholder="粘贴 schemaVersion 为 1 的调用方样例 JSON，或点击上方载入调用方示例。" @input="edit" />
     </div>
     <p v-if="error || fileError" id="consumer-input-error" class="consumer-input__error" role="alert">{{ error || fileError }}</p>
   </section>

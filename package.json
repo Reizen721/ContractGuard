@@ -43,6 +43,7 @@
     "regression:v18": "node scripts/regression-v18.mjs",
     "regression:v20": "node scripts/regression-v20.mjs",
     "benchmark:v18": "node scripts/benchmark-v18.mjs",
+    "benchmark:cegar": "node scripts/run-contractbench.mjs",
     "acceptance:v18:deepseek": "node scripts/acceptance-v18-deepseek.mjs",
     "mcp": "node packages/mcp/dist/index.js",
     "plugin:prepare": "node scripts/install-agent-plugin.mjs",

@@ -15,6 +15,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { formatResult, terminalSafe, type OutputFormat } from './formatters.js';
 import { loadLocalContract } from './bundle-loader.js';
 import { registerCallerCommand } from './caller-command.js';
+import { registerCegarCommand } from './cegar-command.js';
 import { registerProjectCommand } from './project-command.js';
 
 type FailOn = 'breaking' | 'potentially-breaking' | 'never';
@@ -208,6 +209,7 @@ program.command('agent')
   });
 
 registerCallerCommand(program);
+registerCegarCommand(program);
 registerProjectCommand(program);
 
 // Do not let Commander consume, reorder, or reinterpret upstream options (including --help).

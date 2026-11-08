@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "exports": { "./agent": { "types": "./dist/agent/manager.d.ts", "import": "./dist/agent/manager.js" } },
+  "exports": {
+    "./agent": { "types": "./dist/agent/manager.d.ts", "import": "./dist/agent/manager.js" },
+    "./cegar": { "types": "./dist/cegar/engine.d.ts", "import": "./dist/cegar/engine.js" }
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "tsc -p tsconfig.test.json && node .test-dist/app.test.js && node .test-dist/v13.test.js && node .test-dist/v14.test.js && node .test-dist/agent.test.js && node .test-dist/caller.test.js",
+    "test": "tsc -p tsconfig.test.json && node .test-dist/app.test.js && node .test-dist/v13.test.js && node .test-dist/v14.test.js && node .test-dist/agent.test.js && node .test-dist/caller.test.js && node .test-dist/cegar.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },

@@ -43,7 +43,7 @@ export function analysisOverview(value: unknown): Record<string, unknown> {
       coverageWarnings: array(coverage?.warnings).length,
       migrationTasks: array(impact?.migrationTasks).length,
     },
-    interpretation: 'compatible and score describe native static checks only. Keep consumerImpact.gate and coverage separate. Missing consumer evidence or partial coverage is not proof of safety. Fetch detail sections or export the complete report before making release claims.',
+    interpretation: 'compatible/score reflect native static rules only; evaluate consumerImpact.gate and coverage separately.',
   };
 }
 
@@ -79,7 +79,7 @@ export function reviewOverview(value: unknown): Record<string, unknown> {
       callerPatches: isRecord(run.callerReview) ? array(run.callerReview.patches).length : 0,
       projectTests: isRecord(run.projectTests) ? projectPhases(run.projectTests).length : 0,
     },
-    interpretation: 'verdict is the deterministic release gate; model recommendations cannot override it. queued/running are unfinished. Poll get_review until completed/failed/cancelled/interrupted. MCP disconnect does not cancel a submitted background run; use cancel_review explicitly.',
+    interpretation: 'verdict is deterministic and never overridden by model prose. Poll get_review until terminal status.',
   };
 }
 
@@ -124,7 +124,7 @@ export function callerReviewOverview(value: unknown): Record<string, unknown> {
     ...pick(report, ['schemaVersion', 'toolVersion', 'generatedAt', 'evidenceKind', 'inputFingerprint', 'sourceFiles', 'summary', 'gate']),
     contractAnalysis: isRecord(report.contractAnalysis) ? analysisOverview(report.contractAnalysis) : null,
     sections: { callsites: array(report.callsites).length, checks: array(report.checks).length, patches: array(report.patches).length, limitations: array(report.limitations).length },
-    interpretation: 'Evidence comes from a bounded TypeScript AST interpreter using supplied response fixtures and expected output. It is not full Node execution, a real endpoint test, or production safety proof. Patches are proposals verified only against the listed supported scenarios; no source file was changed. A verified patch never overrides the original static gate. Details and exports may contain submitted source code and observed sample values.',
+    interpretation: 'Bounded TypeScript AST replay against supplied fixtures (not full Node execution); verified patches do not clear the static gate.',
   };
 }
 
@@ -134,5 +134,71 @@ export function callerReviewSection(value: unknown, section: string, offset: num
   if (!['callsites', 'checks', 'patches', 'limitations'].includes(section)) throw new AdapterError('INVALID_SECTION', 'Unknown caller review section.');
   return { callerReviewId: saved.id, section, ...page(array(report[section]), offset, limit) };
 }
+
+function cegarWitnessItems(witnesses: Record<string, unknown> | undefined): unknown[] {
+  if (!witnesses) return [];
+  return array(witnesses.suites).flatMap((suite) => {
+    if (!isRecord(suite)) return [];
+    return array(suite.adversarial).map((item) => ({
+      operation: suite.operation,
+      ...(isRecord(item) ? item : { item }),
+    }));
+  });
+}
+
+export function cegarOverview(value: unknown): Record<string, unknown> {
+  const run = record(value);
+  const alignment = isRecord(run.alignment) ? run.alignment : undefined;
+  const dataflow = isRecord(run.dataflow) ? run.dataflow : undefined;
+  const witnesses = isRecord(run.witnesses) ? run.witnesses : undefined;
+  const rounds = array(run.rounds);
+  const patches = array(run.finalPatches);
+  return {
+    ...pick(run, [
+      'schemaVersion', 'id', 'title', 'createdAt', 'mode', 'providerId', 'maxRounds',
+      'enableAdversarialFuzzing', 'inputFingerprint', 'releaseGate', 'callerImpactStatus',
+      'patchStatus', 'summary', 'llmCalls', 'durationMs',
+    ]),
+    metrics: dataflow && isRecord(dataflow.metrics) ? dataflow.metrics : null,
+    witnesses: witnesses ? pick(witnesses, ['operations', 'adversarialCount']) : null,
+    rounds: rounds.map((entry) => isRecord(entry) ? {
+      ...pick(entry, ['round', 'proposer', 'actionSummary', 'citedHypothesisIds', 'citedCounterexampleIds', 'verification', 'durationMs']),
+      counterexampleCount: array(entry.counterexamples).length,
+    } : entry),
+    patches: patches.map((patch) => isRecord(patch) ? pick(patch, ['file', 'sourceSha256', 'patchedSha256', 'rationale']) : patch),
+    sections: {
+      hypotheses: array(alignment?.hypotheses).length,
+      witnesses: cegarWitnessItems(witnesses).length,
+      rounds: rounds.length,
+      patches: patches.length,
+      reachability: array(dataflow?.reachability).length,
+    },
+    interpretation: '4-gate airgapped CEGAR verification (TypeChecker, nominal node --test, request contract, differential witnesses); verified caller patches do not clear server releaseGate.',
+  };
+}
+
+export function cegarSection(value: unknown, section: string, offset: number, limit: number): Record<string, unknown> {
+  if (section === 'overview') return cegarOverview(value);
+  const run = record(value);
+  const alignment = isRecord(run.alignment) ? run.alignment : undefined;
+  const dataflow = isRecord(run.dataflow) ? run.dataflow : undefined;
+  const witnesses = isRecord(run.witnesses) ? run.witnesses : undefined;
+  let items: unknown[];
+  switch (section) {
+    case 'hypotheses': items = array(alignment?.hypotheses); break;
+    case 'witnesses': items = cegarWitnessItems(witnesses); break;
+    case 'rounds':
+      items = array(run.rounds).map((entry) => isRecord(entry) ? {
+        ...pick(entry, ['round', 'proposer', 'actionSummary', 'citedHypothesisIds', 'citedCounterexampleIds', 'verification', 'counterexamples', 'durationMs']),
+        patchFiles: array(entry.patches).map((patch) => isRecord(patch) ? patch.file : patch),
+      } : entry);
+      break;
+    case 'patches': items = array(run.finalPatches); break;
+    case 'reachability': items = array(dataflow?.reachability); break;
+    default: throw new AdapterError('INVALID_SECTION', 'Unknown CEGAR section.');
+  }
+  return { cegarRunId: run.id, section, ...page(items, offset, limit) };
+}
+
 const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
 const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff;

@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-43853d.svg)](package.json)
 
-ContractGuard 是本地运行的 API 变更审查工作台，也是可接入 Agent 的 MCP 插件。它把 OpenAPI 兼容性检查、TypeScript 调用方证据、迁移候选和项目已有测试组织成一份可回看的审查记录。你可以通过网页、命令行或支持 MCP 的 Agent 使用。
+ContractGuard 是本地运行的 OpenAPI 兼容性审查工作台、神经符号反例精化（CEGAR）自修复 Agent 与 MCP 插件。它将 OpenAPI 3.0/3.1 差异分析、跨文件 `ts.TypeChecker` 程序切片、符号 AST 重写与大模型混合补丁合成，以及断网四门验证沙箱（严格类型检查、回归单测、出站请求契约校验与差分对抗见证 Fuzzing）组织为可追溯的审查记录，支持通过网页、CLI 或支持 MCP 的 Coding Agent 调用。
 
 可选的大模型负责规划检查和解释证据；检查结果与发布门禁由确定性逻辑决定。
 
@@ -78,7 +78,7 @@ pnpm plugin:prepare
 
 > 使用 ContractGuard 列出可用项目，以 workflow 模式审查 orders-migration，并等待完成。引用证据 ID 解释契约风险、受影响调用方和基线/候选/补丁测试结果。展示迁移建议，不修改我的源文件。
 
-共 **19 个 MCP 工具**，覆盖分析、保存的 AI 解读、项目发现、Agent 审查、调用方迁移、历史、取消和报告导出。连接同一个服务地址时，网页和 MCP 看到相同记录。详见[宿主接入说明](docs/v2.0-user-guide.md#6-在-codexantigravity-或其他-agent-中使用)。
+共 **19 个 MCP 工具**，覆盖契约分析、AI 风险解读、项目发现、发布审查、多轮 CEGAR 自修复（`contractguard_run_cegar` / `get_cegar_run` / `list_cegar_runs` / `export_cegar_run`）、轻量 AST 重放、取消与分块报告导出。连接同一个服务地址时，网页和 MCP 看到相同记录。详见[宿主接入说明](docs/v2.0-user-guide.md#6-在-codexantigravity-或其他-agent-中使用)。
 
 ## 配置 DeepSeek 自主编排
 
@@ -133,6 +133,7 @@ pnpm contractguard oasdiff --help
 | 开发或对接接口 | [HTTP API](docs/api-reference.md) · [系统架构](docs/architecture.md) · [开发指南](docs/development.md) |
 | 查看规则和实现范围 | [原生规则](docs/compatibility-rules.md) · [调用方迁移](docs/v1.7-caller-migration.md) · [项目测试](docs/v1.8-project-agent.md) |
 | 复查验证证据 | [2.0 验证](docs/v2.0-verification.md) · [历史记录](docs/verification.md) · [公开项目对照](docs/v1.8-benchmark.md) · [上一版本真实 DeepSeek 验收](docs/v1.8-deepseek-acceptance.md) |
+| 神经符号 CEGAR Agent 与基准集 | [CEGAR 架构说明](docs/CEGAR_AGENT_ARCHITECTURE.md) · [ContractBench 报告](benchmarks/contractbench/REPORT.md) |
 | 检查交付内容 | [交付清单](docs/delivery-checklist.md) |
 
 `pnpm check` 包含构建、类型检查、自动化测试和跨入口回归；真实 DeepSeek 验收需要显式运行，不属于默认无模型测试。历史验证按照实际测试版本标注。

@@ -6,6 +6,19 @@ import { record, validateCallerInput } from './validate.js';
 import type { CallerCheck, CallerImpactInput, CallerImpactReport, CallerOperation, CallerPatch, CallerPatchEdit, CallerReplayOutcome, CallerResponse, CallerScenario } from './types.js';
 export type * from './types.js';
 export { validateCallerInput, validateCallerPath, CallerInputError, CALLER_LIMITS } from './validate.js';
+export {
+  analyzeProgramDataflow,
+  createVirtualTsProgram,
+  typecheckVirtualFiles,
+  type CompilerDiagnostic,
+  type CrossFileCallEdge,
+  type FieldUsageKind,
+  type ProgramDataflowReport,
+  type ProgramSlice,
+  type TrackedFieldUsage,
+  type TrackedHttpCallsite,
+  type TypecheckReport,
+} from './program-slice.js';
 export const CALLER_VERSION = '2.0.0';
 
 function responseSchema(document: OpenApiDocument, operation: CallerOperation, status: number): unknown {

@@ -186,7 +186,8 @@ try {
   await startMcp();
   const tools = (await client.listTools()).tools;
   const expectedTools = ['status', 'rules', 'analyze', 'get_analysis', 'list_analyses', 'export_analysis',
-    'explain_analysis', 'list_explanations', 'export_explanation', 'start_review', 'get_review', 'list_reviews', 'cancel_review', 'export_review'];
+    'explain_analysis', 'start_review', 'get_review', 'list_reviews', 'cancel_review', 'export_review',
+    'run_cegar', 'get_cegar_run', 'list_cegar_runs', 'export_cegar_run'];
   for (const name of expectedTools) assert.ok(tools.some((tool) => tool.name === 'contractguard_' + name), 'Missing tool ' + name);
   assert.ok((await client.listResources()).resources.some((resource) => resource.uri === 'contractguard://guide'));
   assert.match((await client.readResource({ uri: 'contractguard://guide' })).contents[0].text, /untrusted data/);
@@ -233,20 +234,17 @@ try {
   const refreshed = await invoke('explain_analysis', { analysisId: analysis.id, force: true });
   assert.notEqual(refreshed.id, firstExplanation.id);
   assert.equal(providerCalls, 2);
-  assert.deepEqual((await pageAll('list_explanations', { analysisId: analysis.id })).map((item) => item.id), [refreshed.id, firstExplanation.id]);
-  assert.deepEqual(JSON.parse(await exportText('export_explanation', { analysisId: analysis.id, reviewId: firstExplanation.id, format: 'json' })), firstExplanation);
-  assert.equal(await exportText('export_explanation', { analysisId: analysis.id, reviewId: firstExplanation.id, format: 'markdown' }),
-    await http('/api/analyses/' + analysis.id + '/ai-reviews/' + firstExplanation.id + '/report?format=markdown'));
+  assert.deepEqual((await http('/api/analyses/' + analysis.id + '/ai-reviews')).reviews.map((item) => item.id), [refreshed.id, firstExplanation.id]);
   await closeMcp();
   await startMcp();
   assert.equal((await invoke('explain_analysis', { analysisId: analysis.id })).id, refreshed.id);
   assert.equal(providerCalls, 2);
   assert.deepEqual(await http('/api/analyses/' + analysis.id), persisted, 'AI explanations must not mutate deterministic evidence or release gates');
-  record('saved-ai-cache-force-export-and-mcp-process-restart');
+  record('saved-ai-cache-force-and-mcp-process-restart');
 
   providerBehavior = 'fail';
   await rejected('explain_analysis', { analysisId: analysis.id, force: true }, /AI_/);
-  assert.equal((await invoke('list_explanations', { analysisId: analysis.id })).total, 2);
+  assert.equal((await http('/api/analyses/' + analysis.id + '/ai-reviews')).reviews.length, 2);
   record('failed-ai-call-is-not-saved');
 
   providerBehavior = 'hold';
@@ -258,9 +256,23 @@ try {
   controller.abort();
   assert.ok(await pending, 'Client cancellation should reject the pending call');
   await until(() => holdAborted, 'MCP cancellation did not reach the provider through HTTP');
-  assert.equal((await invoke('list_explanations', { analysisId: analysis.id })).total, 2);
+  assert.equal((await http('/api/analyses/' + analysis.id + '/ai-reviews')).reviews.length, 2);
   providerBehavior = 'explain';
   record('mcp-cancellation-propagates-to-ai-request');
+
+  const cegarRun = await invoke('run_cegar', { presetId: 'preset-nested-nullable' });
+  assert.equal(cegarRun.callerImpactStatus, 'regression-repaired-verified');
+  assert.equal(cegarRun.releaseGate, 'blocked');
+  assert.equal(cegarRun.rounds.length, 2);
+  const cegarPatches = await pageAll('get_cegar_run', { cegarRunId: cegarRun.id, section: 'patches' });
+  assert.equal(cegarPatches.length, 1);
+  assert.match(cegarPatches[0].unifiedDiff, /reviewer/);
+  const cegarList = await invoke('list_cegar_runs', { includePresets: true });
+  assert.ok(cegarList.items.some((item) => item.id === cegarRun.id));
+  assert.ok(cegarList.presets.some((item) => item.id === 'preset-nested-nullable'));
+  const exportedCegarMd = await exportText('export_cegar_run', { cegarRunId: cegarRun.id, format: 'markdown' }, 512);
+  assert.equal(exportedCegarMd, await http('/api/cegar/runs/' + cegarRun.id + '/report?format=markdown'));
+  record('mcp-cegar-2-round-self-repair-and-export', { cegarRunId: cegarRun.id });
 
   const created = await invoke('start_review', { baseline, candidate, consumerEvidence });
   const run = await waitReview(created.id);
@@ -322,7 +334,7 @@ try {
   assert.equal((await invoke('get_analysis', { analysisId: analysis.id })).score, analysis.score);
   assert.equal((await invoke('get_review', { runId: run.id })).verdict, 'blocked');
   assert.equal((await invoke('get_review', { runId: active.id })).status, 'cancelled');
-  assert.deepEqual(JSON.parse(await exportText('export_explanation', { analysisId: analysis.id, reviewId: refreshed.id, format: 'json' })), refreshed);
+  assert.equal((await invoke('get_cegar_run', { cegarRunId: cegarRun.id })).callerImpactStatus, 'regression-repaired-verified');
   const callsBeforeDisabled = providerCalls;
   await rejected('explain_analysis', { analysisId: analysis.id }, /AI_DISABLED/);
   await rejected('start_review', { baseline, candidate, mode: 'llm' }, /AGENT_PLANNER_UNAVAILABLE/);

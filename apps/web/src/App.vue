@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentWorkspace from './components/AgentWorkspace.vue'
 import CallerWorkspace from './components/CallerWorkspace.vue'
+import CegarWorkspace from './components/CegarWorkspace.vue'
 import AiReportInterpreter from './components/AiReportInterpreter.vue'
 import ChangeList from './components/ChangeList.vue'
 import HistoryPanel from './components/HistoryPanel.vue'
@@ -371,15 +372,15 @@ onBeforeUnmount(() => {
     <aside class="sidebar">
       <a class="brand" href="#" aria-label="ContractGuard 首页" @click.prevent="switchView('analyze')">
         <span class="brand-mark" aria-hidden="true">CG</span>
-        <span><strong>ContractGuard</strong><small>API RELEASE REVIEW</small></span>
+        <span><strong>ContractGuard</strong></span>
       </a>
 
       <nav aria-label="主导航">
         <button :class="{ active: view === 'analyze' }" type="button" :aria-current="view === 'analyze' ? 'page' : undefined" @click="switchView('analyze')">
           新建分析
         </button>
+        <button :class="{ active: view === 'cegar' }" type="button" :aria-current="view === 'cegar' ? 'page' : undefined" @click="switchView('cegar')">自修复 Agent</button>
         <button :class="{ active: view === 'agent' }" type="button" :aria-current="view === 'agent' ? 'page' : undefined" @click="switchView('agent')">Agent 审查</button>
-        <button :class="{ active: view === 'callers' }" type="button" :aria-current="view === 'callers' ? 'page' : undefined" @click="switchView('callers')">调用方迁移</button>
         <button :class="{ active: view === 'history' }" type="button" :aria-current="view === 'history' ? 'page' : undefined" @click="switchView('history')">
           分析历史
           <b v-if="history.length">{{ history.length }}</b>
@@ -393,7 +394,6 @@ onBeforeUnmount(() => {
         <span class="status-dot" :class="{ online: apiOnline === true, offline: apiOnline === false }"></span>
         <div>
           <strong>{{ apiOnline === null ? '正在检测服务' : apiOnline ? '分析引擎在线' : '分析引擎离线' }}</strong>
-          <small>OpenAPI 3.0 / 3.1</small>
         </div>
       </div>
       <p class="version">v2.0.0</p>
@@ -406,14 +406,11 @@ onBeforeUnmount(() => {
         </button>
         <nav class="mobile-nav" aria-label="移动端主导航">
           <button type="button" :aria-current="view === 'analyze' ? 'page' : undefined" :class="{ active: view === 'analyze' }" @click="switchView('analyze')">分析</button>
+          <button type="button" :aria-current="view === 'cegar' ? 'page' : undefined" :class="{ active: view === 'cegar' }" @click="switchView('cegar')">自修复</button>
           <button type="button" :aria-current="view === 'agent' ? 'page' : undefined" :class="{ active: view === 'agent' }" @click="switchView('agent')">Agent</button>
-          <button type="button" :aria-current="view === 'callers' ? 'page' : undefined" :class="{ active: view === 'callers' }" @click="switchView('callers')">调用方</button>
           <button type="button" :aria-current="view === 'history' ? 'page' : undefined" :class="{ active: view === 'history' }" @click="switchView('history')">历史</button>
           <button type="button" :aria-expanded="rulesOpen" @click="openRules">规则</button>
         </nav>
-        <div class="topbar-spacer"></div>
-        <button class="text-button" type="button" @click="openRules">规则说明</button>
-        <span class="github-link" aria-label="本地运行模式">本地运行</span>
       </header>
 
       <div class="content">
@@ -421,7 +418,6 @@ onBeforeUnmount(() => {
           <section class="page-heading">
             <div>
               <h1>{{ historyReport ? '历史分析报告' : 'OpenAPI 兼容性分析' }}</h1>
-              <p>{{ historyReport ? '只读查看已保存的规则结果；历史未保存原始规范，报告不会与当前编辑区混用。' : '上传当前版本和待发布版本，检查可能影响现有调用方的契约变更。' }}</p>
             </div>
             <div class="hero-actions">
               <button v-if="historyReport" class="button button--quiet" type="button" @click="returnToWorkspace">返回编辑区</button>
@@ -431,14 +427,7 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section v-if="!historyReport" class="workspace" aria-labelledby="workspace-title" :aria-busy="isAnalyzing">
-            <div class="section-heading">
-              <div>
-                <h2 id="workspace-title">输入规范</h2>
-              </div>
-              <div class="direction-legend"><span>当前版本</span><i>→</i><span>待发布版本</span></div>
-            </div>
-
+          <section v-if="!historyReport" class="workspace" aria-label="输入规范" :aria-busy="isAnalyzing">
             <div class="spec-grid">
               <SpecPanel
                 v-model="baseline"
@@ -474,7 +463,6 @@ onBeforeUnmount(() => {
             />
 
             <div class="analyze-bar">
-              <p>规则分析在本机执行。主动使用 AI 解读或 LLM 自主编排时，会向所选模型服务发送裁剪后的检查结果；LLM 模式还会发送任务目标。</p>
               <button class="button button--quiet" type="button" :disabled="!hasSpecs || filesLoading || Boolean(consumerInput.error)" @click="switchView('agent')">交给 Agent 审查</button>
               <button class="button button--primary" type="button" :disabled="!hasSpecs || isAnalyzing || filesLoading || Boolean(consumerInput.error)" @click="runAnalysis">
                 <span v-if="isAnalyzing" class="spinner"></span>
@@ -484,23 +472,26 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-if="activeAnalysis" id="analysis-results" class="results">
-            <p v-if="reportIsStale" class="report-notice" role="status">输入已变更：下方报告对应上一次提交的规范，不代表当前编辑内容。请重新运行分析。</p>
+            <p v-if="reportIsStale" class="report-notice" role="status">输入已变更：下方报告对应上一次提交的规范，请重新运行分析。</p>
             <div class="section-heading report-heading">
               <div>
                 <h2>{{ activeAnalysis.baselineName }} <span>→</span> {{ activeAnalysis.candidateName }}</h2>
-                <p class="report-date">分析报告 · {{ formatDate(activeAnalysis.createdAt) }}</p>
+                <p class="report-date">{{ formatDate(activeAnalysis.createdAt) }}</p>
               </div>
               <div ref="exportMenu" class="export-menu">
                 <button ref="exportButton" class="button button--quiet" type="button" aria-controls="export-options" :aria-expanded="exportOpen" @click="exportOpen = !exportOpen">
                   导出报告 <span aria-hidden="true">⌄</span>
                 </button>
                 <div v-if="exportOpen" id="export-options" class="export-popover" aria-label="选择报告格式">
-                  <button type="button" @click="exportReport('markdown')">Markdown <small>便于评审</small></button>
-                  <button type="button" @click="exportReport('html')">HTML <small>独立分享</small></button>
-                  <button type="button" @click="exportReport('json')">JSON <small>CI 集成</small></button>
+                  <button type="button" @click="exportReport('markdown')">Markdown</button>
+                  <button type="button" @click="exportReport('html')">HTML</button>
+                  <button type="button" @click="exportReport('json')">JSON</button>
                 </div>
               </div>
             </div>
+            <SummaryCards :analysis="activeAnalysis" />
+            <CoveragePanel :coverage="activeAnalysis.coverage" />
+            <ConsumerImpactPanel :report="activeAnalysis.consumerImpact" :error="activeAnalysis.consumerImpactError" />
             <details class="report-provenance">
               <summary>报告来源与策略</summary>
               <dl>
@@ -519,14 +510,12 @@ onBeforeUnmount(() => {
                 </template>
               </div>
             </details>
-            <CoveragePanel :coverage="activeAnalysis.coverage" />
-            <SummaryCards :analysis="activeAnalysis" />
-            <ConsumerImpactPanel :report="activeAnalysis.consumerImpact" :error="activeAnalysis.consumerImpactError" />
             <ChangeList :key="activeAnalysis.id" :analysis="activeAnalysis" />
             <AiReportInterpreter :key="activeAnalysis.id" :analysis-id="activeAnalysis.id" />
           </section>
         </template>
 
+        <CegarWorkspace v-else-if="view === 'cegar'" />
         <AgentWorkspace v-else-if="view === 'agent'" :input="agentInput" :input-issue="agentInputIssue" @edit="switchView('analyze')" @open-caller="openCallerReview" />
         <CallerWorkspace v-else-if="view === 'callers'" :initial-review-id="callerRecordId" />
         <HistoryPanel

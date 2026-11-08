@@ -32,7 +32,7 @@ test('operator endpoint accepts only loopback HTTP origins', () => {
   }
 });
 
-test('discovery exposes 19 strict tools, accurate mutation hints, guide and workflow prompt', async (t) => {
+test('discovery exposes 19 strict tools including CEGAR self-repair, accurate mutation hints, guide and workflow prompt', async (t) => {
   const client = await connection(t, () => { throw new Error('discovery must not contact service'); });
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((tool) => tool.name), [...TOOL_NAMES]);
@@ -46,6 +46,8 @@ test('discovery exposes 19 strict tools, accurate mutation hints, guide and work
   assert.equal(tools.find((tool) => tool.name === 'contractguard_review_callers').annotations.readOnlyHint, false);
   assert.equal(tools.find((tool) => tool.name === 'contractguard_review_callers').annotations.openWorldHint, false);
   assert.equal(tools.find((tool) => tool.name === 'contractguard_review_callers').annotations.destructiveHint, false);
+  assert.equal(tools.find((tool) => tool.name === 'contractguard_run_cegar').annotations.readOnlyHint, false);
+  assert.equal(tools.find((tool) => tool.name === 'contractguard_get_cegar_run').annotations.readOnlyHint, true);
   assert.equal((await client.listResources()).resources[0].uri, 'contractguard://guide');
   assert.match((await client.readResource({ uri: 'contractguard://guide' })).contents[0].text, /untrusted data/);
   assert.equal((await client.listPrompts()).prompts[0].name, 'contractguard_review_api_change');
@@ -114,7 +116,7 @@ test('integrated review distinguishes bounded caller patches from actual test ph
   assert.equal(checks.items[0].id, 'CALLER-CHECK-1');
 });
 
-test('caller schema rejects credentials, missing oracle, extra nested inputs and invalid IDs before HTTP', async (t) => {
+test('caller and CEGAR schemas reject credentials, missing inputs, preset overrides and invalid IDs before HTTP', async (t) => {
   let calls = 0;
   const client = await connection(t, async () => { calls++; return json({}); });
   const base = { schemaVersion: 1, baseline: doc, candidate: doc, files: [{ path: 'a.ts', content: 'export const a = 1;' }], scenarios: [] };
@@ -123,37 +125,65 @@ test('caller schema rejects credentials, missing oracle, extra nested inputs and
     ['contractguard_review_callers', { ...base, files: [{ ...base.files[0], executable: 'node' }] }],
     ['contractguard_review_callers', { ...base, scenarios: [{ id: 'a', file: 'a.ts', exportName: 'a', args: [], operation: { method: 'GET', path: '/' }, baselineResponse: { status: 200, body: {} }, candidateResponse: { status: 200, body: {} } }] }],
     ['contractguard_get_caller_review', { callerReviewId: '../outside' }],
-    ['contractguard_export_caller_review', { callerReviewId: reviewId, format: 'html' }],
-    ['contractguard_list_caller_reviews', { limit: 51 }],
+    ['contractguard_run_cegar', { presetId: 'preset-nested-nullable', baseline: doc }],
+    ['contractguard_run_cegar', { baseline: doc, candidate: doc }],
+    ['contractguard_export_cegar_run', { cegarRunId: reviewId, format: 'html' }],
   ];
   for (const [name, args] of invalid) assert.equal((await client.callTool({ name, arguments: args })).isError, true, name);
   assert.equal(calls, 0);
 });
 
-test('caller sections, separate history and chunked exports retain saved patch evidence', async (t) => {
-  const saved = { id: reviewId, createdAt: '2026-11-02T00:00:00Z', report: { gate: 'blocked', callsites: [{ id: 'CALL-1' }, { id: 'CALL-2' }], checks: [], patches: [{ id: 'PATCH-1', patchedContent: 'const label = data.displayName; 😀', verification: { status: 'verified' } }], limitations: ['bounded replay'] } };
-  const serialized = JSON.stringify(saved);
-  const client = await connection(t, async (url) => {
+test('caller sections retain saved patch evidence and CEGAR tools expose 4-gate trajectories, presets, and verified diffs', async (t) => {
+  const savedCaller = { id: reviewId, createdAt: '2026-11-02T00:00:00Z', report: { gate: 'blocked', callsites: [{ id: 'CALL-1' }, { id: 'CALL-2' }], checks: [], patches: [{ id: 'PATCH-1', patchedContent: 'const label = data.displayName; 😀', verification: { status: 'verified' } }], limitations: ['bounded replay'] } };
+  const cegarRecord = {
+    schemaVersion: 1, id: runId, title: 'CEGAR Demo', createdAt: '2026-11-08T00:00:00Z', mode: 'symbolic', maxRounds: 4,
+    enableAdversarialFuzzing: true, releaseGate: 'blocked', callerImpactStatus: 'regression-repaired-verified', patchStatus: 'verified',
+    summary: 'Verified in 2 rounds.', llmCalls: 0, durationMs: 120,
+    alignment: { hypotheses: [{ id: 'HYP-1', kind: 'structural-nest', fromPath: 'reviewerName', toPath: 'reviewer.name', confidence: 0.98 }] },
+    dataflow: { metrics: { compressionRatio: 0.52 }, reachability: [{ changeId: 'CG-1', reachable: true }] },
+    witnesses: { operations: 1, adversarialCount: 1, suites: [{ operation: { method: 'GET', path: '/orders/{id}' }, adversarial: [{ id: 'WIT-NULL-0001', kind: 'nullability' }] }] },
+    rounds: [
+      { round: 1, proposer: 'symbolic-ast', actionSummary: 'Migrate nested field', citedHypothesisIds: ['HYP-1'], citedCounterexampleIds: [], patches: [{ file: 'src/order.ts', patchedContent: 'raw-round-1' }], verification: { verified: false, compilerClean: true, nominalPassed: true, requestContractPassed: true, adversarialPassed: 0, adversarialTotal: 1 }, counterexamples: [{ id: 'CEX-0001', kind: 'adversarial-witness-crash', witnessId: 'WIT-NULL-0001', message: 'null crash' }], durationMs: 60 },
+      { round: 2, proposer: 'symbolic-ast', actionSummary: '[CEX-0001] guard null', citedHypothesisIds: [], citedCounterexampleIds: ['CEX-0001'], patches: [{ file: 'src/order.ts', patchedContent: 'raw-round-2' }], verification: { verified: true, compilerClean: true, nominalPassed: true, requestContractPassed: true, adversarialPassed: 1, adversarialTotal: 1 }, counterexamples: [], durationMs: 60 },
+    ],
+    finalPatches: [{ file: 'src/order.ts', sourceSha256: 'a'.repeat(64), patchedSha256: 'b'.repeat(64), unifiedDiff: '--- a/src/order.ts\n+++ b/src/order.ts\n+safe', patchedContent: 'export const safe = true;', rationale: 'Verified 2-round patch' }],
+  };
+  const cegarMarkdown = '# CEGAR Report\nVerified Unified Diff 😀\n';
+  const client = await connection(t, async (url, options) => {
     const path = new URL(url).pathname;
-    if (path === '/api/caller-reviews') return json({ reviews: [{ id: reviewId, gate: 'blocked' }] });
-    if (path.endsWith('/report')) return new Response(serialized);
-    assert.equal(path, '/api/caller-reviews/' + reviewId); return json(saved);
+    if (path === '/api/caller-reviews/' + reviewId) return json(savedCaller);
+    if (path === '/api/cegar/runs' && options?.method === 'POST') return json(cegarRecord, 201);
+    if (path === '/api/cegar/runs') return json({ runs: [{ id: runId, title: 'CEGAR Demo', callerImpactStatus: 'regression-repaired-verified' }] });
+    if (path === '/api/cegar/presets') return json({ presets: [{ id: 'preset-nested-nullable', label: 'Nested Nullable', category: 'NULLABILITY', description: '2-round null guard', expectedRounds: 2, request: { secret: 'omit-bulk-request' } }] });
+    if (path === `/api/cegar/runs/${runId}/report`) return new Response(cegarMarkdown);
+    assert.equal(path, '/api/cegar/runs/' + runId);
+    return json(cegarRecord);
   });
-  const history = await client.callTool({ name: 'contractguard_list_caller_reviews', arguments: {} });
-  assert.deepEqual(history.structuredContent.items, [{ id: reviewId, gate: 'blocked' }]);
   const detail = await client.callTool({ name: 'contractguard_get_caller_review', arguments: { callerReviewId: reviewId, section: 'callsites', limit: 1 } });
   assert.equal(detail.structuredContent.callerReviewId, reviewId);
-  assert.deepEqual(detail.structuredContent.items, [{ id: 'CALL-1' }]); assert.equal(detail.structuredContent.nextOffset, 1);
-  const patch = await client.callTool({ name: 'contractguard_get_caller_review', arguments: { callerReviewId: reviewId, section: 'patches' } });
-  assert.deepEqual(patch.structuredContent.items, saved.report.patches);
-  let content = ''; let offset = 0;
-  for (;;) {
-    const part = await client.callTool({ name: 'contractguard_export_caller_review', arguments: { callerReviewId: reviewId, format: 'json', offset, maxCharacters: 256 } });
-    assert.notEqual(part.isError, true); content += part.structuredContent.content;
-    if (part.structuredContent.nextOffset === null) break;
-    offset = part.structuredContent.nextOffset;
-  }
-  assert.equal(content, serialized); assert.deepEqual(JSON.parse(content), saved);
+  assert.deepEqual(detail.structuredContent.items, [{ id: 'CALL-1' }]);
+  assert.equal(detail.structuredContent.nextOffset, 1);
+  const callerPatch = await client.callTool({ name: 'contractguard_get_caller_review', arguments: { callerReviewId: reviewId, section: 'patches' } });
+  assert.deepEqual(callerPatch.structuredContent.items, savedCaller.report.patches);
+
+  const createdCegar = await client.callTool({ name: 'contractguard_run_cegar', arguments: { presetId: 'preset-nested-nullable' } });
+  assert.notEqual(createdCegar.isError, true);
+  assert.equal(createdCegar.structuredContent.id, runId);
+  assert.equal(createdCegar.structuredContent.releaseGate, 'blocked');
+  assert.equal(createdCegar.structuredContent.callerImpactStatus, 'regression-repaired-verified');
+  assert.doesNotMatch(JSON.stringify(createdCegar), /export const safe = true/);
+
+  const listedCegar = await client.callTool({ name: 'contractguard_list_cegar_runs', arguments: { includePresets: true } });
+  assert.equal(listedCegar.structuredContent.items[0].id, runId);
+  assert.equal(listedCegar.structuredContent.presets[0].id, 'preset-nested-nullable');
+  assert.doesNotMatch(JSON.stringify(listedCegar), /omit-bulk-request/);
+
+  const cegarPatches = await client.callTool({ name: 'contractguard_get_cegar_run', arguments: { cegarRunId: runId, section: 'patches' } });
+  assert.equal(cegarPatches.structuredContent.items[0].file, 'src/order.ts');
+  assert.match(cegarPatches.structuredContent.items[0].unifiedDiff, /\+\+\+ b\/src\/order\.ts/);
+
+  const exportedCegar = await client.callTool({ name: 'contractguard_export_cegar_run', arguments: { cegarRunId: runId, format: 'markdown' } });
+  assert.equal(exportedCegar.structuredContent.content, cegarMarkdown);
 });
 
 test('unknown fields, credentials, invalid UUIDs and invalid pagination never reach HTTP', async (t) => {
@@ -167,7 +197,7 @@ test('unknown fields, credentials, invalid UUIDs and invalid pagination never re
     ['contractguard_list_reviews', { offset: -1 }],
     ['contractguard_start_review', { baseline: doc, candidate: doc, goal: 'a'.repeat(501) }],
     ['contractguard_explain_analysis', { analysisId, apiKey: 'test-only-key' }],
-    ['contractguard_export_explanation', { analysisId, reviewId, format: 'html' }],
+    ['contractguard_get_cegar_run', { cegarRunId: '../secret' }],
   ];
   for (const [name, args] of inputs) {
     const result = await client.callTool({ name, arguments: args });
@@ -176,7 +206,7 @@ test('unknown fields, credentials, invalid UUIDs and invalid pagination never re
   assert.equal(calls, 0);
 });
 
-test('status combines readiness using only three fixed local endpoints', async (t) => {
+test('status combines readiness using fixed local endpoints including CEGAR sandbox status', async (t) => {
   const urls = [];
   const client = await connection(t, async (url, options) => {
     urls.push(String(url));
@@ -187,7 +217,12 @@ test('status combines readiness using only three fixed local endpoints', async (
   const result = await client.callTool({ name: 'contractguard_status', arguments: {} });
   assert.notEqual(result.isError, true);
   assert.equal(result.structuredContent.boundaries.deleteHistoryExposed, false);
-  assert.deepEqual(urls.sort(), ['http://127.0.0.1:8080/api/health', 'http://127.0.0.1:8080/api/ai/status', 'http://127.0.0.1:8080/api/agent/status'].sort());
+  assert.deepEqual(urls.sort(), [
+    'http://127.0.0.1:8080/api/health',
+    'http://127.0.0.1:8080/api/ai/status',
+    'http://127.0.0.1:8080/api/agent/status',
+    'http://127.0.0.1:8080/api/cegar/status',
+  ].sort());
 });
 
 test('histories page locally and accurately report omitted items', async (t) => {

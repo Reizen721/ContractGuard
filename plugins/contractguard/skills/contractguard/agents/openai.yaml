@@ -1,4 +1,4 @@
 interface:
   display_name: "ContractGuard"
-  short_description: "Review API changes, caller code evidence, and migration patches"
-  default_prompt: "Use $contractguard to compare my API contracts, inspect authorized TypeScript callers, replay supplied scenarios, and explain the saved evidence and proposed migrations."
+  short_description: "OpenAPI diff, release review, and 4-gate CEGAR caller self-repair"
+  default_prompt: "Use $contractguard to compare OpenAPI contracts, run release reviews, or synthesize verified TypeScript caller migrations with CEGAR."

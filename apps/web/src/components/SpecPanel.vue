@@ -164,7 +164,6 @@ function onDragLeave(): void {
         <h3 :id="`spec-${accent}-title`">{{ title }}</h3>
         <span class="spec-version-label">{{ eyebrow }}</span>
       </div>
-      <span class="format-pill">YAML / JSON</span>
     </header>
 
     <div class="contract-mode" role="group" :aria-label="`${title}输入模式`">
@@ -179,7 +178,6 @@ function onDragLeave(): void {
         <input ref="directoryInput" class="sr-only" type="file" multiple webkitdirectory :aria-label="`导入${title}契约目录`" @change="onBundleInput($event, true)" />
         <input ref="multipleInput" class="sr-only" type="file" multiple accept=".yaml,.yml,.json" :aria-label="`导入${title}多个文件`" @change="onBundleInput($event, false)" />
       </div>
-      <p class="bundle-help">仅读取明确选择的 YAML / JSON 文件，最多 50 个、总计 5 MiB。不访问远程引用；包含子目录时请导入目录。</p>
       <label class="bundle-entry">
         <span>入口文件</span>
         <select :aria-label="`${title}入口文件`" :value="bundle?.entry ?? ''" :disabled="reading || !bundle?.files.length" @change="selectEntry">
@@ -228,7 +226,7 @@ function onDragLeave(): void {
       />
     </label>
     <footer class="spec-panel__footer">
-      <span>{{ reading ? '正在读取选择的文件…' : isBundle ? '不读取服务器本地路径或远程 URL' : '可拖拽规范文件到此处' }}</span>
+      <span>{{ reading ? '正在读取选择的文件…' : '' }}</span>
       <span :id="`spec-${accent}-count`">{{ isBundle ? `${bundle?.files.length ?? 0} 个文件` : `${modelValue.length.toLocaleString()} 字符` }}</span>
     </footer>
   </section>

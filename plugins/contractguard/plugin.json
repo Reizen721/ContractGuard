@@ -2,19 +2,19 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "contractguard",
   "version": "2.0.0",
-  "description": "Review OpenAPI changes and TypeScript caller evidence, verify proposed field migrations in a bounded interpreter, and retrieve saved reports through local MCP.",
+  "description": "Local OpenAPI compatibility analysis, 3-phase release review, and 4-gate Neuro-Symbolic CEGAR caller self-repair over MCP.",
   "author": { "name": "Reizen721", "url": "https://github.com/Reizen721" },
   "homepage": "https://github.com/Reizen721/ContractGuard",
   "repository": "https://github.com/Reizen721/ContractGuard",
   "license": "MIT",
-  "keywords": ["openapi", "api-compatibility", "contract-testing", "mcp"],
+  "keywords": ["openapi", "api-compatibility", "contract-testing", "cegar", "mcp"],
   "extensions": {
     "com.openai": {
       "requires_local_executor": true,
       "interface": {
         "displayName": "ContractGuard",
-        "shortDescription": "API compatibility analysis, reviews, and history",
-        "longDescription": "Use the running local ContractGuard service to compare OpenAPI contracts, check submitted consumer evidence, run bounded reviews, and retrieve saved reports. Shares history and configured AI providers with the web application.",
+        "shortDescription": "OpenAPI diff, release review, and CEGAR self-repair",
+        "longDescription": "Compare OpenAPI specs, run 3-phase project reviews, and synthesize 4-gate verified TypeScript caller patches through your local ContractGuard service.",
         "developerName": "Reizen721",
         "websiteURL": "https://github.com/Reizen721/ContractGuard",
         "category": "Developer Tools",

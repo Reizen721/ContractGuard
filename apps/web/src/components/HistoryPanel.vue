@@ -28,7 +28,6 @@ function consumerLabel(analysis: AnalysisRecord): string {
     <div class="page-heading">
       <div>
         <h1 id="history-title">分析历史</h1>
-        <p>保留每次契约比较的风险快照，便于复核与团队协作。</p>
       </div>
       <button class="button button--quiet" type="button" :disabled="loading" :aria-busy="loading" @click="emit('refresh')">
         {{ loading ? '刷新中…' : '刷新记录' }}
