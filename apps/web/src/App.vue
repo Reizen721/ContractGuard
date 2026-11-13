@@ -27,6 +27,7 @@ import {
 import { sampleBaseline, sampleCandidate, sampleBundles } from './samples'
 import type { AnalysisRecord, ContractBundleInput, ExportFormat, RuleDefinition, ViewName } from './types'
 import { formatDate } from './utils'
+import { locale, toggleLocale } from './i18n'
 
 const view = ref<ViewName>('analyze')
 const callerRecordId = ref<string>()
@@ -396,6 +397,15 @@ onBeforeUnmount(() => {
           <strong>{{ apiOnline === null ? '正在检测服务' : apiOnline ? '分析引擎在线' : '分析引擎离线' }}</strong>
         </div>
       </div>
+      <button
+        class="lang-switch"
+        type="button"
+        :title="locale === 'zh-CN' ? 'Switch to English' : '切换为中文'"
+        :aria-label="locale === 'zh-CN' ? 'Switch to English' : '切换为中文'"
+        @click="toggleLocale"
+      >
+        {{ locale === 'zh-CN' ? 'EN' : '中' }}
+      </button>
       <p class="version">v2.0.0</p>
     </aside>
 
@@ -403,6 +413,15 @@ onBeforeUnmount(() => {
       <header class="topbar">
         <button class="mobile-brand" type="button" aria-label="返回新建分析" @click="switchView('analyze')">
           <span class="brand-mark" aria-hidden="true">CG</span> ContractGuard
+        </button>
+        <button
+          class="lang-switch mobile-lang-switch"
+          type="button"
+          :title="locale === 'zh-CN' ? 'Switch to English' : '切换为中文'"
+          :aria-label="locale === 'zh-CN' ? 'Switch to English' : '切换为中文'"
+          @click="toggleLocale"
+        >
+          {{ locale === 'zh-CN' ? 'EN' : '中' }}
         </button>
         <nav class="mobile-nav" aria-label="移动端主导航">
           <button type="button" :aria-current="view === 'analyze' ? 'page' : undefined" :class="{ active: view === 'analyze' }" @click="switchView('analyze')">分析</button>
